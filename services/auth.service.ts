@@ -27,11 +27,8 @@ export const authService = {
   },
 
   // Crear usuario (público)
-  async crearUsuario(nombre_usuario: string, password: string): Promise<ApiResponse<Usuario>> {
-    const response = await api.post<ApiResponse<Usuario>>('/auth/usuarios', {
-      nombre_usuario,
-      password,
-    });
+  async crearUsuario(data: { nombre_usuario: string; password: string }): Promise<ApiResponse<Usuario>> {
+    const response = await api.post<ApiResponse<Usuario>>('/auth/usuarios', data);
     return response.data;
   },
 
@@ -41,18 +38,45 @@ export const authService = {
     return response.data;
   },
 
-  // Listar todos los usuarios con sus roles
-  async listarUsuarios(): Promise<ApiResponse<Array<{
+  // Listar todos los usuarios con sus roles y sucursal
+  async obtenerUsuarios(): Promise<ApiResponse<Array<{
     id_usuario: number;
     nombre_usuario: string;
     roles: Array<{ id_rol: number; nombre: string }>;
+    id_sucursal?: number;
+    sucursal?: {
+      id_sucursal: number;
+      iniciales: string;
+      nombre: string;
+    };
   }>>> {
     const response = await api.get<ApiResponse<Array<{
       id_usuario: number;
       nombre_usuario: string;
       roles: Array<{ id_rol: number; nombre: string }>;
+      id_sucursal?: number;
+      sucursal?: {
+        id_sucursal: number;
+        iniciales: string;
+        nombre: string;
+      };
     }>>>('/auth/usuarios');
     return response.data;
+  },
+
+  // Alias para compatibilidad
+  async listarUsuarios(): Promise<ApiResponse<Array<{
+    id_usuario: number;
+    nombre_usuario: string;
+    roles: Array<{ id_rol: number; nombre: string }>;
+    id_sucursal?: number;
+    sucursal?: {
+      id_sucursal: number;
+      iniciales: string;
+      nombre: string;
+    };
+  }>>> {
+    return this.obtenerUsuarios();
   },
 
   // Guardar token y usuario en localStorage

@@ -1,19 +1,49 @@
 import { useState, useEffect } from "react";
-import { User, Shield, UserCog, Users } from "lucide-react";
+import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Checkbox } from "./ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/auth.service";
+import sucursalesService, { Sucursal, CrearSucursalDto } from "../services/sucursales.service";
 import { toast } from "sonner";
 
 interface Usuario {
   id_usuario: number;
   nombre_usuario: string;
   roles: { id_rol: number; nombre: string }[];
+  id_sucursal?: number;
+  sucursal?: {
+    id_sucursal: number;
+    iniciales: string;
+    nombre: string;
+  };
 }
 
 interface Rol {
@@ -42,23 +72,51 @@ export default function Configuracion() {
   const [nuevoPasswordConfirmar, setNuevoPasswordConfirmar] = useState("");
   const [creandoUsuario, setCreandoUsuario] = useState(false);
 
+  // Estados para sucursales
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [loadingSucursales, setLoadingSucursales] = useState(false);
+  const [openCrearSucursal, setOpenCrearSucursal] = useState(false);
+  const [openEditarSucursal, setOpenEditarSucursal] = useState(false);
+  const [openAsignarSucursal, setOpenAsignarSucursal] = useState(false);
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState<Sucursal | null>(null);
+  const [usuarioParaAsignar, setUsuarioParaAsignar] = useState<number | null>(null);
+  const [sucursalIdAsignar, setSucursalIdAsignar] = useState("");
+  const [formSucursal, setFormSucursal] = useState<CrearSucursalDto>({
+    iniciales: "",
+    nombre: "",
+    activo: true,
+  });
+
   const esAdministrador = user?.roles.some(rol => rol.nombre === "ADMINISTRADOR");
 
   useEffect(() => {
     if (esAdministrador) {
       cargarUsuarios();
+      cargarSucursales();
     }
   }, [esAdministrador]);
 
   const cargarUsuarios = async () => {
     try {
       setLoadingUsuarios(true);
-      const response = await authService.listarUsuarios();
-      setUsuarios(response.data);
-    } catch (error) {
+      const response = await authService.obtenerUsuarios();
+      setUsuarios(response.data || []);
+    } catch (error: any) {
       toast.error("Error al cargar usuarios");
     } finally {
       setLoadingUsuarios(false);
+    }
+  };
+
+  const cargarSucursales = async () => {
+    try {
+      setLoadingSucursales(true);
+      const response = await sucursalesService.listarSucursales();
+      setSucursales(response.data || []);
+    } catch (error: any) {
+      toast.error("Error al cargar sucursales");
+    } finally {
+      setLoadingSucursales(false);
     }
   };
 
@@ -102,7 +160,7 @@ export default function Configuracion() {
 
     try {
       setCreandoUsuario(true);
-      await authService.crearUsuario(nuevoUsuario.trim(), nuevoPassword);
+      await authService.crearUsuario({ nombre_usuario: nuevoUsuario.trim(), password: nuevoPassword });
       toast.success("Usuario creado exitosamente");
       setNuevoUsuario("");
       setNuevoPassword("");
@@ -117,6 +175,82 @@ export default function Configuracion() {
     }
   };
 
+  // Funciones para sucursales
+  const handleCrearSucursal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await sucursalesService.crearSucursal(formSucursal);
+      toast.success("Sucursal creada exitosamente");
+      setOpenCrearSucursal(false);
+      setFormSucursal({ iniciales: "", nombre: "", activo: true });
+      await cargarSucursales();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al crear sucursal");
+    }
+  };
+
+  const handleEditarSucursal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sucursalSeleccionada) return;
+    
+    try {
+      await sucursalesService.actualizarSucursal(sucursalSeleccionada.id_sucursal, formSucursal);
+      toast.success("Sucursal actualizada exitosamente");
+      setOpenEditarSucursal(false);
+      setSucursalSeleccionada(null);
+      setFormSucursal({ iniciales: "", nombre: "", activo: true });
+      await cargarSucursales();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar sucursal");
+    }
+  };
+
+  const handleEliminarSucursal = async (id: number) => {
+    if (!confirm("¿Estás seguro de desactivar esta sucursal?")) return;
+    
+    try {
+      await sucursalesService.eliminarSucursal(id);
+      toast.success("Sucursal desactivada exitosamente");
+      await cargarSucursales();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al eliminar sucursal");
+    }
+  };
+
+  const handleAsignarSucursal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usuarioParaAsignar || !sucursalIdAsignar) return;
+
+    try {
+      await sucursalesService.asignarSucursalUsuario({
+        id_usuario: usuarioParaAsignar,
+        id_sucursal: parseInt(sucursalIdAsignar),
+      });
+      toast.success("Sucursal asignada exitosamente");
+      setOpenAsignarSucursal(false);
+      setUsuarioParaAsignar(null);
+      setSucursalIdAsignar("");
+      await cargarUsuarios();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al asignar sucursal");
+    }
+  };
+
+  const abrirDialogoEditarSucursal = (sucursal: Sucursal) => {
+    setSucursalSeleccionada(sucursal);
+    setFormSucursal({
+      iniciales: sucursal.iniciales,
+      nombre: sucursal.nombre,
+      activo: sucursal.activo,
+    });
+    setOpenEditarSucursal(true);
+  };
+
+  const abrirDialogoAsignarSucursal = (idUsuario: number) => {
+    setUsuarioParaAsignar(idUsuario);
+    setOpenAsignarSucursal(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -126,11 +260,12 @@ export default function Configuracion() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`grid w-full max-w-md ${esAdministrador ? 'grid-cols-4' : 'grid-cols-1'}`}>
+        <TabsList className={`grid w-full max-w-2xl ${esAdministrador ? 'grid-cols-5' : 'grid-cols-1'}`}>
           <TabsTrigger value="perfil">Mi Perfil</TabsTrigger>
           {esAdministrador && <TabsTrigger value="roles">Administrar Roles</TabsTrigger>}
           {esAdministrador && <TabsTrigger value="crear-usuario">Crear Usuario</TabsTrigger>}
           {esAdministrador && <TabsTrigger value="usuarios">Usuarios</TabsTrigger>}
+          {esAdministrador && <TabsTrigger value="sucursales">Sucursales</TabsTrigger>}
         </TabsList>
 
         {/* Perfil Tab */}
@@ -408,6 +543,332 @@ export default function Configuracion() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+
+        {/* Sucursales Tab - Solo para administradores */}
+        {esAdministrador && (
+          <TabsContent value="sucursales" className="mt-6">
+            <div className="space-y-6">
+              {/* Card para gestión de sucursales */}
+              <Card className="bg-white border-gray-200">
+                <CardHeader>
+                  <CardTitle className="text-gray-900 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-5 w-5" />
+                      Gestión de Sucursales
+                    </div>
+                    <Button 
+                      onClick={() => setOpenCrearSucursal(true)} 
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Nueva Sucursal
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingSucursales ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">Cargando sucursales...</p>
+                    </div>
+                  ) : sucursales.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">No hay sucursales registradas.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Iniciales</TableHead>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Total Usuarios</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sucursales.map((sucursal) => (
+                          <TableRow key={sucursal.id_sucursal}>
+                            <TableCell className="font-medium">{sucursal.iniciales}</TableCell>
+                            <TableCell>{sucursal.nombre}</TableCell>
+                            <TableCell>{sucursal.total_usuarios || 0}</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                sucursal.activo 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {sucursal.activo ? 'Activa' : 'Inactiva'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => abrirDialogoEditarSucursal(sucursal)}
+                                  className="gap-2"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Editar
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleEliminarSucursal(sucursal.id_sucursal)}
+                                  className="gap-2"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Eliminar
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Card para asignar sucursales a usuarios */}
+              <Card className="bg-white border-gray-200">
+                <CardHeader>
+                  <CardTitle className="text-gray-900 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Asignar Sucursales a Usuarios
+                    </div>
+                    <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios}>
+                      {loadingUsuarios ? "Actualizando..." : "Actualizar"}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {loadingUsuarios ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">Cargando usuarios...</p>
+                    </div>
+                  ) : usuarios.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">No hay usuarios registrados.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuario</TableHead>
+                          <TableHead>Sucursal Asignada</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {usuarios.map((usuario) => (
+                          <TableRow key={usuario.id_usuario}>
+                            <TableCell className="font-medium">{usuario.nombre_usuario}</TableCell>
+                            <TableCell>
+                              {usuario.sucursal ? (
+                                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm">
+                                  {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500 text-sm">Sin sucursal asignada</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => abrirDialogoAsignarSucursal(usuario.id_usuario)}
+                              >
+                                {usuario.sucursal ? 'Cambiar Sucursal' : 'Asignar Sucursal'}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Dialog para crear sucursal */}
+            <Dialog open={openCrearSucursal} onOpenChange={setOpenCrearSucursal}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Crear Nueva Sucursal</DialogTitle>
+                  <DialogDescription>
+                    Ingresa los datos de la nueva sucursal. Las iniciales deben ser únicas.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCrearSucursal}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="crear-iniciales">Iniciales</Label>
+                      <Input
+                        id="crear-iniciales"
+                        value={formSucursal.iniciales}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, iniciales: e.target.value.toUpperCase() })}
+                        placeholder="Ej: SD"
+                        maxLength={5}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="crear-nombre">Nombre</Label>
+                      <Input
+                        id="crear-nombre"
+                        value={formSucursal.nombre}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value })}
+                        placeholder="Ej: Santo Domingo"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="crear-activo"
+                        checked={formSucursal.activo}
+                        onCheckedChange={(checked) => setFormSucursal({ ...formSucursal, activo: !!checked })}
+                      />
+                      <Label htmlFor="crear-activo" className="cursor-pointer">
+                        Sucursal activa
+                      </Label>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => {
+                      setOpenCrearSucursal(false);
+                      setFormSucursal({ iniciales: "", nombre: "", activo: true });
+                    }}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Crear Sucursal</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dialog para editar sucursal */}
+            <Dialog open={openEditarSucursal} onOpenChange={setOpenEditarSucursal}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Editar Sucursal</DialogTitle>
+                  <DialogDescription>
+                    Modifica los datos de la sucursal seleccionada.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleEditarSucursal}>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="editar-iniciales">Iniciales</Label>
+                      <Input
+                        id="editar-iniciales"
+                        value={formSucursal.iniciales}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, iniciales: e.target.value.toUpperCase() })}
+                        placeholder="Ej: SD"
+                        maxLength={5}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="editar-nombre">Nombre</Label>
+                      <Input
+                        id="editar-nombre"
+                        value={formSucursal.nombre}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value })}
+                        placeholder="Ej: Santo Domingo"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="editar-activo"
+                        checked={formSucursal.activo}
+                        onCheckedChange={(checked) => setFormSucursal({ ...formSucursal, activo: !!checked })}
+                      />
+                      <Label htmlFor="editar-activo" className="cursor-pointer">
+                        Sucursal activa
+                      </Label>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => {
+                      setOpenEditarSucursal(false);
+                      setSucursalSeleccionada(null);
+                      setFormSucursal({ iniciales: "", nombre: "", activo: true });
+                    }}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Guardar Cambios</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dialog para asignar sucursal a usuario */}
+            <Dialog open={openAsignarSucursal} onOpenChange={setOpenAsignarSucursal}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Asignar Sucursal</DialogTitle>
+                  <DialogDescription>
+                    Selecciona la sucursal que deseas asignar a este usuario.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAsignarSucursal}>
+                  <div className="space-y-4">
+                    {usuarioParaAsignar && (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-600">Usuario seleccionado:</p>
+                        <p className="font-semibold">
+                          {usuarios.find(u => u.id_usuario === usuarioParaAsignar)?.nombre_usuario}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="asignar-sucursal">Sucursal</Label>
+                      <Select value={sucursalIdAsignar} onValueChange={setSucursalIdAsignar} required>
+                        <SelectTrigger id="asignar-sucursal">
+                          <SelectValue placeholder="Selecciona una sucursal" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sucursales
+                            .filter(s => s.activo)
+                            .map((sucursal) => (
+                              <SelectItem 
+                                key={sucursal.id_sucursal} 
+                                value={sucursal.id_sucursal.toString()}
+                              >
+                                {sucursal.iniciales} - {sucursal.nombre}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => {
+                      setOpenAsignarSucursal(false);
+                      setUsuarioParaAsignar(null);
+                      setSucursalIdAsignar("");
+                    }}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">Asignar Sucursal</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         )}
       </Tabs>
