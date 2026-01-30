@@ -50,7 +50,16 @@ echo "💾 Guardando cambios locales..."
 git stash || true
 
 echo "📥 Descargando cambios..."
-git pull origin "$BRANCH"
+# Configurar git para hacer rebase en caso de divergencia
+git config pull.rebase false
+
+# Intentar pull normal primero
+if ! git pull origin "$BRANCH"; then
+  echo "⚠️  Detectadas ramas divergentes, forzando actualización desde remoto..."
+  # Si falla, resetear al estado del remoto
+  git fetch origin "$BRANCH"
+  git reset --hard origin/"$BRANCH"
+fi
 
 echo "💾 Restaurando cambios locales si existían..."
 git stash pop || true

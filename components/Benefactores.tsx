@@ -246,12 +246,10 @@ export default function Benefactores() {
       const todosTitulares = data.filter((b) => b.tipo_benefactor === "TITULAR");
       setTitularesDB(todosTitulares);
 
-      // Vista de tabla: si puede editar ve todo; si no, ve los suyos aprobados
-      const benefactoresVisibles = puedeEditar
-        ? data
-        : data.filter((b) => b.id_usuario === user?.id_usuario && b.estado_registro === "APROBADO");
-
-      setBenefactores(benefactoresVisibles);
+      // El backend ya filtra según permisos:
+      // - Solo lectura: ve TODOS los benefactores
+      // - Lectura + escritura: ve solo los benefactores creados por él
+      setBenefactores(data);
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Error al cargar benefactores");
     } finally {
