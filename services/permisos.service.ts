@@ -3,7 +3,6 @@ import {
   MisPermisosResponse,
   Recurso,
   Permisos,
-  Rol,
   ApiResponse,
 } from '../types';
 

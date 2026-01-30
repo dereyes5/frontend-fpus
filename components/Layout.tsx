@@ -6,7 +6,6 @@ import {
   Wallet, 
   Heart, 
   LogOut,
-  Menu,
   Settings,
   CheckSquare,
   Key

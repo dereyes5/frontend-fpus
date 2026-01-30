@@ -113,7 +113,7 @@ const ciudadesPorProvincia: Record<string, string[]> = {
 const provinciasSelector = Object.keys(ciudadesPorProvincia);
 
 export default function Benefactores() {
-  const { user, permisos } = useAuth();
+  const { permisos } = useAuth();
   const puedeEditar = permisos?.benefactores_escritura ?? false;
 
   const [benefactores, setBenefactores] = useState<Benefactor[]>([]);

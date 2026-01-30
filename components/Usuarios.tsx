@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import authService from '../services/auth.service';
-import rolesService from '../services/roles.service';
+import { authService } from '../services/auth.service';
+import { rolesService } from '../services/roles.service';
 import sucursalesService, { Sucursal } from '../services/sucursales.service';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -59,7 +59,7 @@ interface Rol {
 }
 
 export default function Usuarios() {
-  const { usuario: usuarioActual } = useAuth();
+  const { user: usuarioActual } = useAuth();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);

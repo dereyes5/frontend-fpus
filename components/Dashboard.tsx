@@ -26,19 +26,19 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      // Cargar datos según permisos
+      // Cargar datos según permisos granulares
       const promises: Promise<any>[] = [];
 
-      // Siempre cargar benefactores si tiene permiso
-      if (permisos?.benefactores?.ver) {
+      // Siempre cargar benefactores si tiene permiso de lectura
+      if (permisos?.benefactores_lectura) {
         promises.push(
           benefactoresService.getBenefactores({ page: 1, limit: 1 })
             .then(res => ({ type: 'benefactores', data: res.pagination?.total || 0 }))
         );
       }
 
-      // Cargar cobros si tiene permiso
-      if (permisos?.cobros?.ver) {
+      // Cargar cobros si tiene permiso de lectura
+      if (permisos?.cartera_lectura) {
         promises.push(
           cobrosService.getEstadisticas()
             .then(res => ({ type: 'cobros', data: res.data }))
@@ -46,7 +46,7 @@ export default function Dashboard() {
       }
 
       // Cargar aprobaciones si tiene permiso
-      if (permisos?.aprobaciones?.ver) {
+      if (permisos?.aprobaciones) {
         promises.push(
           aprobacionesService.getPendientes(1, 1)
             .then(res => ({ type: 'aprobaciones', data: res.pagination?.total || 0 }))
@@ -86,7 +86,7 @@ export default function Dashboard() {
       change: "Registros activos en el sistema",
       icon: Users,
       color: "bg-blue-500",
-      show: permisos?.benefactores?.ver,
+      show: permisos?.benefactores_lectura,
     },
     {
       title: "Recaudado Este Mes",
@@ -94,7 +94,7 @@ export default function Dashboard() {
       change: `${stats.porcentajeRecaudacion}% de recaudación`,
       icon: Wallet,
       color: "bg-green-500",
-      show: permisos?.cobros?.ver,
+      show: permisos?.cartera_lectura,
     },
     {
       title: "Pendientes Aprobación",
@@ -102,7 +102,7 @@ export default function Dashboard() {
       change: "Registros esperando revisión",
       icon: CheckSquare,
       color: "bg-orange-500",
-      show: permisos?.aprobaciones?.ver,
+      show: permisos?.aprobaciones,
     },
     {
       title: "Sistema Operativo",
@@ -120,21 +120,21 @@ export default function Dashboard() {
       icon: Users,
       color: "bg-[#4064E3] hover:bg-[#3451C2]",
       path: "/benefactores",
-      show: permisos?.benefactores?.ver,
+      show: permisos?.benefactores_lectura,
     },
     {
       label: "Revisar aprobaciones",
       icon: CheckSquare,
       color: "bg-[#0F8F5B] hover:bg-[#0D7A4C]",
       path: "/aprobaciones",
-      show: permisos?.aprobaciones?.ver,
+      show: permisos?.aprobaciones,
     },
     {
       label: "Ver estado de cartera",
       icon: Wallet,
       color: "bg-purple-500 hover:bg-purple-600",
       path: "/cartera",
-      show: permisos?.cobros?.ver,
+      show: permisos?.cartera_lectura,
     },
   ];
 

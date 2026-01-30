@@ -15,7 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function Aprobaciones() {
-  const { permisos, user } = useAuth();
+  const { permisos } = useAuth();
 
   const [pendientes, setPendientes] = useState<Benefactor[]>([]);
   const [loading, setLoading] = useState(true);
