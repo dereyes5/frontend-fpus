@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/auth.service';
 import { rolesService } from '../services/roles.service';
 import sucursalesService, { Sucursal } from '../services/sucursales.service';
