@@ -13,31 +13,33 @@ import {
 export const cobrosService = {
   // Obtener lista de benefactores (para cobros)
   async getBenefactoresParaCobros(): Promise<ApiResponse<Benefactor[]>> {
-    const response = await api.get<ApiResponse<Benefactor[]>>('/cobros/benefactores');
+    const response = await api.get<ApiResponse<Benefactor[]>>('/cobros/benefactores', {
+      params: { limit: 1000 } // Cargar todos los registros
+    });
     return response.data;
   },
 
-  // Obtener estado de pagos del mes actual
+  // Obtener estado de aportes del mes actual
   async getEstadoActual(): Promise<ApiResponse<EstadoPago[]>> {
-    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/estado/actual');
+    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/estado/actual', {
+      params: { limit: 1000 } // Cargar todos los registros
+    });
     return response.data;
   },
 
-  // Obtener morosos (no pagaron)
-  async getMorosos(): Promise<ApiResponse<EstadoPago[]>> {
-    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/morosos');
+  // Obtener no aportados
+  async getNoAportados(): Promise<ApiResponse<EstadoPago[]>> {
+    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/no-aportados', {
+      params: { limit: 1000 } // Cargar todos los registros
+    });
     return response.data;
   },
 
-  // Obtener pagados
-  async getPagados(): Promise<ApiResponse<EstadoPago[]>> {
-    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/pagados');
-    return response.data;
-  },
-
-  // Obtener pagos parciales
-  async getPagosParciales(): Promise<ApiResponse<EstadoPago[]>> {
-    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/pagos-parciales');
+  // Obtener aportados
+  async getAportados(): Promise<ApiResponse<EstadoPago[]>> {
+    const response = await api.get<ApiResponse<EstadoPago[]>>('/cobros/aportados', {
+      params: { limit: 1000 } // Cargar todos los registros
+    });
     return response.data;
   },
 

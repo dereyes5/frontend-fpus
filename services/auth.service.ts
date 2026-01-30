@@ -38,6 +38,27 @@ export const authService = {
     return response.data;
   },
 
+  // Actualizar permisos de usuario
+  async actualizarPermisos(
+    idUsuario: number, 
+    permisos: {
+      cartera_lectura: boolean;
+      cartera_escritura: boolean;
+      benefactores_lectura: boolean;
+      benefactores_escritura: boolean;
+      social_lectura: boolean;
+      social_escritura: boolean;
+      configuraciones: boolean;
+      aprobaciones: boolean;
+    }
+  ): Promise<ApiResponse<void>> {
+    const response = await api.put<ApiResponse<void>>(
+      `/auth/usuarios/${idUsuario}/permisos`, 
+      permisos
+    );
+    return response.data;
+  },
+
   // Listar todos los usuarios con sus roles y sucursal
   async obtenerUsuarios(): Promise<ApiResponse<Array<{
     id_usuario: number;

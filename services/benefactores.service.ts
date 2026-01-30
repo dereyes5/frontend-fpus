@@ -23,7 +23,12 @@ export const benefactoresService = {
     if (filters?.tipo_benefactor) params.append('tipo_benefactor', filters.tipo_benefactor);
     if (filters?.estado_registro) params.append('estado_registro', filters.estado_registro);
     if (filters?.page) params.append('page', filters.page.toString());
-    if (filters?.limit) params.append('limit', filters.limit.toString());
+    // Si no se especifica limit, pedir un número alto para obtener todos
+    if (filters?.limit) {
+      params.append('limit', filters.limit.toString());
+    } else {
+      params.append('limit', '1000'); // Límite alto para obtener todos los registros
+    }
 
     const response = await api.get<ApiResponse<Benefactor[]>>(`/benefactores?${params.toString()}`);
     return response.data;

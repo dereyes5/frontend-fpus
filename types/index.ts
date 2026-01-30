@@ -2,12 +2,18 @@
 export interface Usuario {
   id_usuario: number;
   nombre_usuario: string;
-  roles: Rol[];
+  permisos: PermisosGranulares;
 }
 
-export interface Rol {
-  id_rol: number;
-  nombre: string;
+export interface PermisosGranulares {
+  cartera_lectura: boolean;
+  cartera_escritura: boolean;
+  benefactores_lectura: boolean;
+  benefactores_escritura: boolean;
+  social_lectura: boolean;
+  social_escritura: boolean;
+  configuraciones: boolean;
+  aprobaciones: boolean;
 }
 
 export interface LoginRequest {
@@ -29,7 +35,7 @@ export interface CambiarPasswordRequest {
   password_nueva: string;
 }
 
-// Tipos de permisos
+// Tipos de permisos (LEGACY - mantener por compatibilidad temporal)
 export interface Permisos {
   [recurso: string]: {
     ver: boolean;
@@ -40,9 +46,7 @@ export interface Permisos {
 export interface MisPermisosResponse {
   success: boolean;
   data: {
-    rol: Rol;
-    permisos: Permisos;
-    recursos: Recurso[];
+    permisos: PermisosGranulares;
   };
 }
 
@@ -141,27 +145,24 @@ export interface AprobacionRequest {
 }
 
 // Tipos de cobros y saldos
-export type EstadoPagoType = 'PAGADO' | 'PAGO_PARCIAL' | 'NO_PAGADO';
+export type EstadoPagoType = 'APORTADO' | 'NO_APORTADO';
 
 export interface EstadoPago {
   id_benefactor: number;
   nombre_completo: string;
   cedula: string;
-  monto_a_pagar: string;
-  monto_pagado: string;
-  saldo_pendiente: string;
-  estado_pago: EstadoPagoType;
-  ultima_fecha_pago?: string;
+  monto_esperado: string;
+  monto_aportado: string;
+  estado_aporte: EstadoPagoType;
+  ultima_fecha_aporte?: string;
 }
 
 export interface Estadisticas {
   total_titulares: string;
-  pagados: string;
-  parciales: string;
-  no_pagados: string;
+  aportados: string;
+  no_aportados: string;
   total_esperado: string;
   total_recaudado: string;
-  total_pendiente: string;
   porcentaje_recaudacion: string;
 }
 
@@ -211,11 +212,10 @@ export interface RegistrarCobrosRequest {
 export interface HistorialPago {
   mes: number;
   anio: number;
-  monto_a_pagar: string;
-  monto_pagado: string;
-  saldo_pendiente: string;
-  estado_pago: EstadoPagoType;
-  ultima_fecha_pago?: string;
+  monto_esperado: string;
+  monto_aportado: string;
+  estado_aporte: EstadoPagoType;
+  ultima_fecha_aporte?: string;
 }
 
 export interface SaldoBenefactor {

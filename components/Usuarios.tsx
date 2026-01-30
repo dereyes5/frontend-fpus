@@ -262,42 +262,44 @@ export default function Usuarios() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Sucursal</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {usuarios.map((usuario) => (
-                <TableRow key={usuario.id_usuario}>
-                  <TableCell>{usuario.id_usuario}</TableCell>
-                  <TableCell className="font-medium">
-                    {usuario.nombre_usuario}
-                  </TableCell>
-                  <TableCell>
-                    {usuario.roles && usuario.roles.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {usuario.roles.map((rol) => (
-                          <Badge key={rol.id_rol} variant="secondary">
-                            {rol.nombre}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">Sin rol</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {usuario.sucursal ? (
-                      <Badge variant="outline">
-                        <Building2 className="mr-1 h-3 w-3" />
-                        {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
-                      </Badge>
+          {/* Vista desktop - Tabla */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Sucursal</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usuarios.map((usuario) => (
+                  <TableRow key={usuario.id_usuario}>
+                    <TableCell>{usuario.id_usuario}</TableCell>
+                    <TableCell className="font-medium">
+                      {usuario.nombre_usuario}
+                    </TableCell>
+                    <TableCell>
+                      {usuario.roles && usuario.roles.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {usuario.roles.map((rol) => (
+                            <Badge key={rol.id_rol} variant="secondary">
+                              {rol.nombre}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">Sin rol</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {usuario.sucursal ? (
+                        <Badge variant="outline">
+                          <Building2 className="mr-1 h-3 w-3" />
+                          {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
+                        </Badge>
                     ) : (
                       <span className="text-muted-foreground">Sin sucursal</span>
                     )}
@@ -326,6 +328,71 @@ export default function Usuarios() {
               ))}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Vista móvil - Cards */}
+          <div className="md:hidden space-y-4">
+            {usuarios.map((usuario) => (
+              <Card key={usuario.id_usuario} className="border-2">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs text-gray-500">ID: {usuario.id_usuario}</p>
+                      <p className="font-semibold text-lg">{usuario.nombre_usuario}</p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Roles</p>
+                    {usuario.roles && usuario.roles.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {usuario.roles.map((rol) => (
+                          <Badge key={rol.id_rol} variant="secondary">
+                            {rol.nombre}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Sin rol</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Sucursal</p>
+                    {usuario.sucursal ? (
+                      <Badge variant="outline">
+                        <Building2 className="mr-1 h-3 w-3" />
+                        {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Sin sucursal</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => abrirDialogoAsignarRol(usuario.id_usuario)}
+                    >
+                      <UserPlus className="mr-1 h-3 w-3" />
+                      Rol
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => abrirDialogoAsignarSucursal(usuario.id_usuario)}
+                    >
+                      <Building2 className="mr-1 h-3 w-3" />
+                      Sucursal
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

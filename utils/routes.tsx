@@ -22,27 +22,27 @@ export const router = createBrowserRouter([
       { index: true, Component: Dashboard },
       { 
         path: "benefactores", 
-        element: <ProtectedRoute requiredRoles={["EJECUTIVO", "ADMINISTRADOR"]}><Benefactores /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><Benefactores /></ProtectedRoute>
       },
       { 
         path: "benefactores/:id", 
-        element: <ProtectedRoute requiredRoles={["EJECUTIVO", "ADMINISTRADOR"]}><BenefactorDetail /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><BenefactorDetail /></ProtectedRoute>
       },
       { 
         path: "aprobaciones", 
-        element: <ProtectedRoute requiredRoles={["ADMINISTRADOR"]}><Aprobaciones /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["aprobaciones"]}><Aprobaciones /></ProtectedRoute>
       },
       { 
         path: "cartera", 
-        element: <ProtectedRoute requiredRoles={["EJECUTIVO_CONTABLE", "ADMINISTRADOR"]}><Cartera /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["cartera_lectura"]}><Cartera /></ProtectedRoute>
       },
       { 
         path: "social", 
-        element: <ProtectedRoute requiredRoles={["EJECUTIVO_SOCIAL", "ADMINISTRADOR"]}><Social /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["social_lectura"]}><Social /></ProtectedRoute>
       },
       { 
         path: "configuracion", 
-        Component: Configuracion 
+        element: <ProtectedRoute requiredPermissions={["configuraciones"]}><Configuracion /></ProtectedRoute>
       },
     ],
   },

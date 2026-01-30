@@ -33,8 +33,7 @@ export default function Aprobaciones() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [tieneContratoPreview, setTieneContratoPreview] = useState(false);
 
-  const esAdministrador = user?.roles?.some((r) => r.nombre === "ADMINISTRADOR") ?? false;
-  const puedeEditar = esAdministrador || (permisos?.aprobaciones?.editar ?? false);
+  const puedeAprobar = permisos?.aprobaciones ?? false;
 
   useEffect(() => {
     loadPendientes();
@@ -199,7 +198,7 @@ export default function Aprobaciones() {
           <h1 className="text-3xl font-bold text-[#1D1D1D] mb-2">Aprobaciones</h1>
           <p className="text-gray-600">Gestión de aprobación de registros pendientes</p>
         </div>
-        {pendientes.length > 0 && puedeEditar && (
+        {pendientes.length > 0 && puedeAprobar && (
           <div className="flex gap-2">
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleAprobarTodos} disabled={submitting}>
               <CheckCircle className="h-4 w-4 mr-2" />
@@ -242,7 +241,8 @@ export default function Aprobaciones() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            {/* Vista desktop - Tabla */}
+            <div className="hidden md:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -283,7 +283,7 @@ export default function Aprobaciones() {
                             Ver detalles
                           </Button>
 
-                          {puedeEditar ? (
+                          {puedeAprobar ? (
                             <>
                               <Button
                                 size="sm"
@@ -311,6 +311,81 @@ export default function Aprobaciones() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Vista móvil - Cards */}
+            <div className="md:hidden p-4 space-y-4">
+              {pendientes.map((benefactor) => (
+                <Card key={benefactor.id_benefactor} className="border-2 border-orange-200">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
+                        <p className="text-sm text-gray-600">{benefactor.cedula}</p>
+                      </div>
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                        <Clock className="h-3 w-3 mr-1" />
+                        PENDIENTE
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-500">Tipo</p>
+                        <Badge variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
+                          {benefactor.tipo_benefactor}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Ciudad</p>
+                        <p className="font-medium">{benefactor.ciudad}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-gray-500">Fecha Registro</p>
+                      <p className="text-sm">{benefactor.fecha_registro ? formatDate(benefactor.fecha_registro) : "N/A"}</p>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex flex-col gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => handleOpenPreview(benefactor.id_benefactor)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver detalles
+                      </Button>
+
+                      {puedeAprobar ? (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                            onClick={() => handleOpenDialog(benefactor, "APROBADO")}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Aprobar
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-red-600 hover:bg-red-700 text-white flex-1"
+                            onClick={() => handleOpenDialog(benefactor, "RECHAZADO")}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Rechazar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Badge variant="secondary" className="w-full justify-center">Solo lectura</Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </CardContent>
         </Card>

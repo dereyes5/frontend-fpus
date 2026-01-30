@@ -1,30 +1,21 @@
 import { ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { PermisosGranulares } from '../types';
 
 interface ProtectedActionProps {
   children: ReactNode;
-  recurso: string;
-  accion?: 'ver' | 'editar';
+  permiso: keyof PermisosGranulares; // Permiso específico requerido
   fallback?: ReactNode;
 }
 
 export const ProtectedAction = ({ 
   children, 
-  recurso, 
-  accion = 'editar',
+  permiso,
   fallback = null 
 }: ProtectedActionProps) => {
   const { permisos } = useAuth();
 
-  if (!permisos || !permisos[recurso]) {
-    return <>{fallback}</>;
-  }
-
-  const tienePermiso = accion === 'ver' 
-    ? permisos[recurso].ver 
-    : permisos[recurso].editar;
-
-  if (!tienePermiso) {
+  if (!permisos || !permisos[permiso]) {
     return <>{fallback}</>;
   }
 

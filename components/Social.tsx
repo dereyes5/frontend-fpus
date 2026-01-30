@@ -345,19 +345,20 @@ export default function Social() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead>Beneficiario</TableHead>
-              <TableHead>Tipo de Caso</TableHead>
-              <TableHead>Prioridad</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Trabajadora Social</TableHead>
-              <TableHead>Ciudad</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead>Beneficiario</TableHead>
+                <TableHead>Tipo de Caso</TableHead>
+                <TableHead>Prioridad</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Trabajadora Social</TableHead>
+                <TableHead>Ciudad</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {filteredCasos.map((caso) => (
               <TableRow key={caso.id}>
@@ -393,6 +394,7 @@ export default function Social() {
             ))}
           </TableBody>
         </Table>
+        </div>
 
         {filteredCasos.length === 0 && (
           <div className="text-center py-12 text-gray-500">
@@ -426,7 +428,7 @@ export default function Social() {
               
               <Separator />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Tipo de caso</p>
                   <p className="text-[#1D1D1D]">{selectedCaso.tipoCaso}</p>

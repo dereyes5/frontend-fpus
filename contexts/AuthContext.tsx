@@ -1,23 +1,21 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '../services/auth.service';
-import { permisosService } from '../services/permisos.service';
-import { Usuario, Permisos } from '../types';
+import { Usuario, PermisosGranulares } from '../types';
 import { toast } from 'sonner';
 
 interface AuthContextType {
   user: Usuario | null;
-  permisos: Permisos | null;
+  permisos: PermisosGranulares | null;
   loading: boolean;
   login: (nombre_usuario: string, password: string) => Promise<void>;
   logout: () => void;
-  refreshPermisos: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<Usuario | null>(null);
-  const [permisos, setPermisos] = useState<Permisos | null>(null);
+  const [permisos, setPermisos] = useState<PermisosGranulares | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Cargar usuario y permisos al iniciar
@@ -25,21 +23,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const initAuth = async () => {
       if (authService.isAuthenticated()) {
         const savedUser = authService.getUser();
-        const savedPermisos = permisosService.getPermisos();
         
-        if (savedUser && savedPermisos) {
+        if (savedUser && savedUser.permisos) {
           setUser(savedUser);
-          setPermisos(savedPermisos);
+          setPermisos(savedUser.permisos);
         } else {
-          // Si no hay permisos guardados, obtenerlos del servidor
-          try {
-            const response = await permisosService.getMisPermisos();
-            setPermisos(response.data.permisos);
-            permisosService.savePermisos(response.data.permisos);
-          } catch (error) {
-            console.error('Error al cargar permisos:', error);
-            authService.clearAuth();
-          }
+          authService.clearAuth();
         }
       }
       setLoading(false);
@@ -53,14 +42,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       const loginResponse = await authService.login({ nombre_usuario, password });
       
-      // Guardar token y usuario
+      // Guardar token y usuario (que incluye permisos)
       authService.saveAuth(loginResponse.data.token, loginResponse.data.usuario);
       setUser(loginResponse.data.usuario);
-
-      // Obtener permisos
-      const permisosResponse = await permisosService.getMisPermisos();
-      setPermisos(permisosResponse.data.permisos);
-      permisosService.savePermisos(permisosResponse.data.permisos);
+      setPermisos(loginResponse.data.usuario.permisos);
 
       toast.success('Sesión iniciada correctamente');
     } catch (error: any) {
@@ -79,18 +64,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     toast.info('Sesión cerrada');
   };
 
-  const refreshPermisos = async () => {
-    try {
-      const response = await permisosService.getMisPermisos();
-      setPermisos(response.data.permisos);
-      permisosService.savePermisos(response.data.permisos);
-    } catch (error) {
-      console.error('Error al refrescar permisos:', error);
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, permisos, loading, login, logout, refreshPermisos }}>
+    <AuthContext.Provider value={{ user, permisos, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

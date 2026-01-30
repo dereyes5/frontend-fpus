@@ -4,11 +4,11 @@ import { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRoles?: string[];
+  requiredPermissions?: string[]; // Array de permisos requeridos (cualquiera)
 }
 
-export const ProtectedRoute = ({ children, requiredRoles }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+export const ProtectedRoute = ({ children, requiredPermissions }: ProtectedRouteProps) => {
+  const { user, permisos, loading } = useAuth();
 
   if (loading) {
     return (
@@ -21,17 +21,17 @@ export const ProtectedRoute = ({ children, requiredRoles }: ProtectedRouteProps)
     );
   }
 
-  if (!user) {
+  if (!user || !permisos) {
     return <Navigate to="/login" replace />;
   }
 
-  // Si se especifican roles requeridos, verificar que el usuario tenga al menos uno
-  if (requiredRoles && requiredRoles.length > 0) {
-    const tieneRol = user.roles.some(userRole => 
-      requiredRoles.includes(userRole.nombre)
+  // Si se especifican permisos requeridos, verificar que el usuario tenga al menos uno
+  if (requiredPermissions && requiredPermissions.length > 0) {
+    const tienePermiso = requiredPermissions.some(permiso => 
+      permisos[permiso as keyof typeof permisos] === true
     );
     
-    if (!tieneRol) {
+    if (!tienePermiso) {
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
           <div className="text-center">

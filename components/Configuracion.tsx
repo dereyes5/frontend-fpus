@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2 } from "lucide-react";
+import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2, Lock, RefreshCw, CheckCircle2, XCircle, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -33,11 +33,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/auth.service";
 import sucursalesService, { Sucursal, CrearSucursalDto } from "../services/sucursales.service";
 import { toast } from "sonner";
+import { PermisosGranulares } from "../types";
 
-interface Usuario {
+interface UsuarioConPermisos {
   id_usuario: number;
   nombre_usuario: string;
-  roles: { id_rol: number; nombre: string }[];
+  permisos?: PermisosGranulares | null;
   id_sucursal?: number;
   sucursal?: {
     id_sucursal: number;
@@ -46,25 +47,13 @@ interface Usuario {
   };
 }
 
-interface Rol {
-  id_rol: number;
-  nombre: string;
-}
-
-const ROLES_DISPONIBLES: Rol[] = [
-  { id_rol: 1, nombre: "EJECUTIVO" },
-  { id_rol: 2, nombre: "ADMINISTRADOR" },
-  { id_rol: 3, nombre: "EJECUTIVO_SOCIAL" },
-  { id_rol: 4, nombre: "EJECUTIVO_CONTABLE" },
-];
-
 export default function Configuracion() {
-  const { user } = useAuth();
+  const { user, permisos } = useAuth();
   
-  // Estados para administración de roles
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  // Estados para administración de usuarios y permisos
+  const [usuarios, setUsuarios] = useState<UsuarioConPermisos[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
-  const [updatingRoles, setUpdatingRoles] = useState<number | null>(null);
+  const [updatingPermisos, setUpdatingPermisos] = useState<number | null>(null);
 
   // Estados para creación de usuarios
   const [nuevoUsuario, setNuevoUsuario] = useState("");
@@ -87,14 +76,14 @@ export default function Configuracion() {
     activo: true,
   });
 
-  const esAdministrador = user?.roles.some(rol => rol.nombre === "ADMINISTRADOR");
+  const puedeConfigurar = permisos?.configuraciones ?? false;
 
   useEffect(() => {
-    if (esAdministrador) {
+    if (puedeConfigurar) {
       cargarUsuarios();
       cargarSucursales();
     }
-  }, [esAdministrador]);
+  }, [puedeConfigurar]);
 
   const cargarUsuarios = async () => {
     try {
@@ -120,23 +109,64 @@ export default function Configuracion() {
     }
   };
 
-  const toggleRol = async (usuarioId: number, rolId: number, tieneRol: boolean) => {
+  // Función para actualizar un permiso individual
+  const togglePermiso = async (
+    usuarioId: number, 
+    permiso: keyof PermisosGranulares, 
+    valorActual: boolean
+  ) => {
     try {
-      setUpdatingRoles(usuarioId);
+      setUpdatingPermisos(usuarioId);
       
-      if (tieneRol) {
-        // Remover rol - por ahora mostrar mensaje
-        toast.info("Funcionalidad de eliminar rol pendiente de implementar");
-      } else {
-        // Asignar rol
-        await authService.asignarRol({ id_usuario: usuarioId, id_rol: rolId });
-        toast.success("Rol asignado exitosamente");
-        await cargarUsuarios(); // Recargar lista
+      // Obtener permisos actuales del usuario
+      const usuario = usuarios.find(u => u.id_usuario === usuarioId);
+      if (!usuario) {
+        toast.error("Usuario no encontrado");
+        return;
       }
+
+      // Si el usuario no tiene permisos, inicializar todos en false
+      const permisosBase = usuario.permisos || {
+        cartera_lectura: false,
+        cartera_escritura: false,
+        benefactores_lectura: false,
+        benefactores_escritura: false,
+        social_lectura: false,
+        social_escritura: false,
+        configuraciones: false,
+        aprobaciones: false,
+      };
+
+      // Crear objeto con todos los permisos, cambiando solo el que se está toggling
+      const permisosActualizados = {
+        cartera_lectura: permisosBase.cartera_lectura ?? false,
+        cartera_escritura: permisosBase.cartera_escritura ?? false,
+        benefactores_lectura: permisosBase.benefactores_lectura ?? false,
+        benefactores_escritura: permisosBase.benefactores_escritura ?? false,
+        social_lectura: permisosBase.social_lectura ?? false,
+        social_escritura: permisosBase.social_escritura ?? false,
+        configuraciones: permisosBase.configuraciones ?? false,
+        aprobaciones: permisosBase.aprobaciones ?? false,
+        [permiso]: !valorActual, // Toggle el permiso específico
+      };
+
+      await authService.actualizarPermisos(usuarioId, permisosActualizados);
+      
+      // Actualizar solo el usuario específico en el estado local (sin recargar toda la lista)
+      setUsuarios(prevUsuarios => 
+        prevUsuarios.map(u => 
+          u.id_usuario === usuarioId 
+            ? { ...u, permisos: permisosActualizados }
+            : u
+        )
+      );
+      
+      toast.success("Permiso actualizado exitosamente");
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Error al actualizar roles");
+      console.error("Error al actualizar permisos:", error);
+      toast.error(error.response?.data?.message || "Error al actualizar permisos");
     } finally {
-      setUpdatingRoles(null);
+      setUpdatingPermisos(null);
     }
   };
 
@@ -165,7 +195,7 @@ export default function Configuracion() {
       setNuevoUsuario("");
       setNuevoPassword("");
       setNuevoPasswordConfirmar("");
-      if (esAdministrador) {
+      if (puedeConfigurar) {
         await cargarUsuarios();
       }
     } catch (error: any) {
@@ -260,17 +290,42 @@ export default function Configuracion() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`grid w-full max-w-2xl ${esAdministrador ? 'grid-cols-5' : 'grid-cols-1'}`}>
-          <TabsTrigger value="perfil">Mi Perfil</TabsTrigger>
-          {esAdministrador && <TabsTrigger value="roles">Administrar Roles</TabsTrigger>}
-          {esAdministrador && <TabsTrigger value="crear-usuario">Crear Usuario</TabsTrigger>}
-          {esAdministrador && <TabsTrigger value="usuarios">Usuarios</TabsTrigger>}
-          {esAdministrador && <TabsTrigger value="sucursales">Sucursales</TabsTrigger>}
+        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' : 'grid-cols-1 max-w-md'}`}>
+          <TabsTrigger value="perfil" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <User className="h-4 w-4" />
+            Mi Perfil
+          </TabsTrigger>
+          {puedeConfigurar && (
+            <TabsTrigger value="roles" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Administrar Roles</span>
+              <span className="sm:hidden">Roles</span>
+            </TabsTrigger>
+          )}
+          {puedeConfigurar && (
+            <TabsTrigger value="crear-usuario" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <UserCog className="h-4 w-4" />
+              <span className="hidden sm:inline">Crear Usuario</span>
+              <span className="sm:hidden">Crear</span>
+            </TabsTrigger>
+          )}
+          {puedeConfigurar && (
+            <TabsTrigger value="usuarios" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <Users className="h-4 w-4" />
+              Usuarios
+            </TabsTrigger>
+          )}
+          {puedeConfigurar && (
+            <TabsTrigger value="sucursales" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <Building2 className="h-4 w-4" />
+              Sucursales
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Perfil Tab */}
         <TabsContent value="perfil" className="mt-6">
-          <Card className="max-w-2xl bg-white border-gray-200">
+          <Card className="w-full max-w-2xl bg-white border-gray-200">
             <CardHeader>
               <CardTitle className="text-gray-900 flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -287,16 +342,17 @@ export default function Configuracion() {
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">{user?.nombre_usuario}</h3>
                   <p className="text-gray-600">
-                    {user?.roles && user.roles.length > 0 
-                      ? user.roles[0].nombre 
-                      : "Sin rol asignado"}
+                    Usuario del Sistema
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <Label className="text-gray-600">Usuario</Label>
+                  <Label className="text-gray-600 flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Usuario
+                  </Label>
                   <Input 
                     value={user?.nombre_usuario || ""} 
                     disabled 
@@ -304,16 +360,20 @@ export default function Configuracion() {
                   />
                 </div>
 
-                {user?.roles && user.roles.length > 0 && (
+                {permisos && (
                   <div>
-                    <Label className="text-gray-600">Roles Asignados</Label>
+                    <Label className="text-gray-600 flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Permisos Asignados
+                    </Label>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {user.roles.map((rol) => (
+                      {Object.entries(permisos).map(([key, value]) => value && (
                         <div
-                          key={rol.id_rol}
-                          className="px-3 py-2 bg-[#0F8F5B] text-white rounded-lg text-sm font-medium"
+                          key={key}
+                          className="px-3 py-2 bg-[#0F8F5B] text-white rounded-lg text-sm font-medium flex items-center gap-2"
                         >
-                          {rol.nombre}
+                          <CheckCircle2 className="h-3 w-3" />
+                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                         </div>
                       ))}
                     </div>
@@ -330,14 +390,14 @@ export default function Configuracion() {
           </Card>
         </TabsContent>
 
-        {/* Roles Tab - Solo para administradores */}
-        {esAdministrador && (
+        {/* Permisos Tab - Gestión de permisos granulares */}
+        {puedeConfigurar && (
           <TabsContent value="roles" className="mt-6">
             <Card className="bg-white border-gray-200">
               <CardHeader>
                 <CardTitle className="text-gray-900 flex items-center gap-2">
                   <UserCog className="h-5 w-5" />
-                  Administrar Roles de Usuarios
+                  Administrar Permisos de Usuarios
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -346,78 +406,274 @@ export default function Configuracion() {
                     <p className="text-gray-600">Cargando usuarios...</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
+                    {/* Descripción del sistema */}
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex gap-3">
+                        <Shield className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-semibold text-blue-900 mb-1">
+                            Sistema de Permisos Granulares
+                          </h4>
+                          <p className="text-sm text-blue-800">
+                            Controla el acceso de cada usuario a módulos específicos. 
+                            Los cambios se aplican inmediatamente pero requieren que el usuario vuelva a iniciar sesión.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de usuarios con sus permisos */}
                     {usuarios.map((usuario) => (
                       <div 
                         key={usuario.id_usuario}
-                        className="p-4 border border-gray-200 rounded-lg space-y-3"
+                        className="p-5 border border-gray-200 rounded-lg space-y-4 bg-gray-50"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-semibold text-gray-900">{usuario.nombre_usuario}</h3>
+                            <h3 className="font-semibold text-gray-900 text-lg flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              {usuario.nombre_usuario}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              ID: {usuario.id_usuario}
+                            </p>
                           </div>
-                          {updatingRoles === usuario.id_usuario && (
-                            <span className="text-sm text-blue-600">Actualizando...</span>
+                          {updatingPermisos === usuario.id_usuario && (
+                            <span className="text-sm text-blue-600 flex items-center gap-2">
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              Actualizando...
+                            </span>
                           )}
                         </div>
                         
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-gray-700">Roles asignados:</Label>
-                          <div className="grid grid-cols-2 gap-3">
-                            {ROLES_DISPONIBLES.map((rol) => {
-                              const tieneRol = usuario.roles.some(r => r.id_rol === rol.id_rol);
-                              return (
-                                <div key={rol.id_rol} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`usuario-${usuario.id_usuario}-rol-${rol.id_rol}`}
-                                    checked={tieneRol}
-                                    onCheckedChange={() => toggleRol(usuario.id_usuario, rol.id_rol, tieneRol)}
-                                    disabled={updatingRoles === usuario.id_usuario}
-                                  />
-                                  <label
-                                    htmlFor={`usuario-${usuario.id_usuario}-rol-${rol.id_rol}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                                  >
-                                    {rol.nombre}
-                                  </label>
-                                </div>
-                              );
-                            })}
+                        <div className="space-y-3">
+                          <Label className="text-sm font-medium text-gray-700">
+                            Permisos asignados:
+                          </Label>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Cartera Lectura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-cartera_lectura`}
+                                checked={usuario.permisos?.cartera_lectura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'cartera_lectura', 
+                                  usuario.permisos?.cartera_lectura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-cartera_lectura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Cartera (Lectura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Ver información de cartera y aportes
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Cartera Escritura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-cartera_escritura`}
+                                checked={usuario.permisos?.cartera_escritura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'cartera_escritura', 
+                                  usuario.permisos?.cartera_escritura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-cartera_escritura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Cartera (Escritura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Registrar cobros y modificar cartera
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Benefactores Lectura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-benefactores_lectura`}
+                                checked={usuario.permisos?.benefactores_lectura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'benefactores_lectura', 
+                                  usuario.permisos?.benefactores_lectura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_lectura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Benefactores (Lectura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Ver información de benefactores
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Benefactores Escritura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-benefactores_escritura`}
+                                checked={usuario.permisos?.benefactores_escritura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'benefactores_escritura', 
+                                  usuario.permisos?.benefactores_escritura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_escritura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Benefactores (Escritura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Crear y editar benefactores
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Social Lectura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-social_lectura`}
+                                checked={usuario.permisos?.social_lectura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'social_lectura', 
+                                  usuario.permisos?.social_lectura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-social_lectura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Social (Lectura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Ver información del módulo social
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Social Escritura */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-social_escritura`}
+                                checked={usuario.permisos?.social_escritura ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'social_escritura', 
+                                  usuario.permisos?.social_escritura ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-social_escritura`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Social (Escritura)
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Editar información del módulo social
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Configuraciones */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-configuraciones`}
+                                checked={usuario.permisos?.configuraciones ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'configuraciones', 
+                                  usuario.permisos?.configuraciones ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-configuraciones`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Configuraciones
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Acceso completo al módulo de configuración
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Aprobaciones */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-aprobaciones`}
+                                checked={usuario.permisos?.aprobaciones ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario, 
+                                  'aprobaciones', 
+                                  usuario.permisos?.aprobaciones ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-aprobaciones`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Aprobaciones
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Aprobar o rechazar benefactores
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
                     ))}
+
+                    {usuarios.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        No hay usuarios registrados
+                      </div>
+                    )}
                   </div>
                 )}
-
-                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex gap-3">
-                    <Shield className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-blue-900 mb-1">
-                        Descripción de Roles
-                      </h4>
-                      <ul className="text-sm text-blue-800 space-y-1">
-                        <li><strong>EJECUTIVO:</strong> Gestiona benefactores (crear, editar, ver)</li>
-                        <li><strong>ADMINISTRADOR:</strong> Acceso completo, aprueba solicitudes y gestiona configuración</li>
-                        <li><strong>EJECUTIVO_SOCIAL:</strong> Gestiona casos sociales</li>
-                        <li><strong>EJECUTIVO_CONTABLE:</strong> Gestiona cartera y cobros</li>
-                      </ul>
-                      <p className="text-xs text-blue-700 mt-2">
-                        Un usuario puede tener múltiples roles asignados
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
         )}
 
+
         {/* Crear Usuario Tab - Solo para administradores */}
-        {esAdministrador && (
+        {puedeConfigurar && (
           <TabsContent value="crear-usuario" className="mt-6">
-            <Card className="max-w-2xl bg-white border-gray-200">
+            <Card className="w-full max-w-2xl bg-white border-gray-200">
               <CardHeader>
                 <CardTitle className="text-gray-900 flex items-center gap-2">
                   <UserCog className="h-5 w-5" />
@@ -427,7 +683,10 @@ export default function Configuracion() {
               <CardContent>
                 <form onSubmit={handleCrearUsuario} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="nuevo-usuario">Nombre de usuario</Label>
+                    <Label htmlFor="nuevo-usuario" className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Nombre de usuario
+                    </Label>
                     <Input
                       id="nuevo-usuario"
                       value={nuevoUsuario}
@@ -439,7 +698,10 @@ export default function Configuracion() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="nuevo-password">Contraseña</Label>
+                    <Label htmlFor="nuevo-password" className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Contraseña
+                    </Label>
                     <Input
                       id="nuevo-password"
                       type="password"
@@ -451,7 +713,10 @@ export default function Configuracion() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="nuevo-password-confirmar">Confirmar contraseña</Label>
+                    <Label htmlFor="nuevo-password-confirmar" className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Confirmar contraseña
+                    </Label>
                     <Input
                       id="nuevo-password-confirmar"
                       type="password"
@@ -463,8 +728,18 @@ export default function Configuracion() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={creandoUsuario}>
-                      {creandoUsuario ? "Creando..." : "Crear usuario"}
+                    <Button type="submit" disabled={creandoUsuario} className="gap-2">
+                      {creandoUsuario ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Creando...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4" />
+                          Crear usuario
+                        </>
+                      )}
                     </Button>
                   </div>
                 </form>
@@ -486,7 +761,7 @@ export default function Configuracion() {
         )}
 
         {/* Usuarios Tab - Solo para administradores (solo lectura) */}
-        {esAdministrador && (
+        {puedeConfigurar && (
           <TabsContent value="usuarios" className="mt-6">
             <Card className="bg-white border-gray-200">
               <CardHeader>
@@ -495,7 +770,8 @@ export default function Configuracion() {
                     <Users className="h-5 w-5" />
                     Usuarios y Roles
                   </div>
-                  <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios}>
+                  <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios} className="gap-2">
+                    <RefreshCw className={`h-4 w-4 ${loadingUsuarios ? 'animate-spin' : ''}`} />
                     {loadingUsuarios ? "Actualizando..." : "Actualizar"}
                   </Button>
                 </CardTitle>
@@ -514,26 +790,32 @@ export default function Configuracion() {
                     {usuarios.map((usuario) => (
                       <div
                         key={usuario.id_usuario}
-                        className="p-4 border border-gray-200 rounded-lg flex items-start justify-between gap-4"
+                        className="p-4 border border-gray-200 rounded-lg flex flex-col sm:flex-row items-start sm:justify-between gap-4"
                       >
                         <div>
                           <h3 className="font-semibold text-gray-900">{usuario.nombre_usuario}</h3>
-                          <p className="text-sm text-gray-600">{usuario.roles.length > 0 ? `${usuario.roles.length} rol(es)` : "Sin roles"}</p>
+                          <p className="text-sm text-gray-600">
+                            {usuario.permisos ? 'Permisos asignados' : 'Sin permisos'}
+                          </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 justify-end">
-                          {usuario.roles.length > 0 ? (
-                            usuario.roles.map((rol) => (
-                              <div
-                                key={`${usuario.id_usuario}-${rol.id_rol}`}
-                                className="px-3 py-2 bg-[#0F8F5B] text-white rounded-lg text-sm font-medium"
-                              >
-                                {rol.nombre}
-                              </div>
-                            ))
+                        <div className="flex flex-wrap gap-2 sm:justify-end w-full sm:w-auto">
+                          {usuario.permisos ? (
+                            Object.entries(usuario.permisos)
+                              .filter(([_, value]) => value === true)
+                              .map(([key]) => (
+                                <div
+                                  key={`${usuario.id_usuario}-${key}`}
+                                  className="px-3 py-2 bg-[#0F8F5B] text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </div>
+                              ))
                           ) : (
-                            <div className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">
-                              Sin roles
+                            <div className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2">
+                              <XCircle className="h-3 w-3" />
+                              Sin permisos
                             </div>
                           )}
                         </div>
@@ -547,13 +829,13 @@ export default function Configuracion() {
         )}
 
         {/* Sucursales Tab - Solo para administradores */}
-        {esAdministrador && (
+        {puedeConfigurar && (
           <TabsContent value="sucursales" className="mt-6">
             <div className="space-y-6">
               {/* Card para gestión de sucursales */}
               <Card className="bg-white border-gray-200">
                 <CardHeader>
-                  <CardTitle className="text-gray-900 flex items-center justify-between gap-2">
+                  <CardTitle className="text-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-5 w-5" />
                       Gestión de Sucursales
@@ -561,10 +843,11 @@ export default function Configuracion() {
                     <Button 
                       onClick={() => setOpenCrearSucursal(true)} 
                       size="sm"
-                      className="gap-2"
+                      className="gap-2 w-full sm:w-auto"
                     >
                       <Plus className="h-4 w-4" />
-                      Nueva Sucursal
+                      <span className="hidden sm:inline">Nueva Sucursal</span>
+                      <span className="sm:hidden">Nueva</span>
                     </Button>
                   </CardTitle>
                 </CardHeader>
@@ -578,38 +861,98 @@ export default function Configuracion() {
                       <p className="text-gray-600">No hay sucursales registradas.</p>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Iniciales</TableHead>
-                          <TableHead>Nombre</TableHead>
-                          <TableHead>Total Usuarios</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    <>
+                      {/* Vista desktop - Tabla */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Iniciales</TableHead>
+                              <TableHead>Nombre</TableHead>
+                              <TableHead>Total Usuarios</TableHead>
+                              <TableHead>Estado</TableHead>
+                              <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sucursales.map((sucursal) => (
+                              <TableRow key={sucursal.id_sucursal}>
+                                <TableCell className="font-medium">{sucursal.iniciales}</TableCell>
+                                <TableCell>{sucursal.nombre}</TableCell>
+                                <TableCell>{sucursal.total_usuarios || 0}</TableCell>
+                                <TableCell>
+                                  <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 w-fit ${
+                                    sucursal.activo 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {sucursal.activo ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                    {sucursal.activo ? 'Activa' : 'Inactiva'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => abrirDialogoEditarSucursal(sucursal)}
+                                      className="gap-2"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                      Editar
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleEliminarSucursal(sucursal.id_sucursal)}
+                                      className="gap-2"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Eliminar
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Vista móvil - Cards */}
+                      <div className="md:hidden space-y-4">
                         {sucursales.map((sucursal) => (
-                          <TableRow key={sucursal.id_sucursal}>
-                            <TableCell className="font-medium">{sucursal.iniciales}</TableCell>
-                            <TableCell>{sucursal.nombre}</TableCell>
-                            <TableCell>{sucursal.total_usuarios || 0}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-full text-xs ${
-                                sucursal.activo 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {sucursal.activo ? 'Activa' : 'Inactiva'}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
+                          <Card key={sucursal.id_sucursal} className="border-2">
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <Building2 className="h-4 w-4 text-gray-600" />
+                                    <p className="font-bold text-lg">{sucursal.iniciales}</p>
+                                  </div>
+                                  <p className="text-sm text-gray-600 mt-1">{sucursal.nombre}</p>
+                                </div>
+                                <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
+                                  sucursal.activo 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {sucursal.activo ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                  {sucursal.activo ? 'Activa' : 'Inactiva'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-sm">
+                                <Users className="h-4 w-4 text-gray-600" />
+                                <span className="text-gray-600">Total usuarios:</span>
+                                <span className="font-semibold">{sucursal.total_usuarios || 0}</span>
+                              </div>
+
+                              <div className="flex gap-2 pt-2">
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => abrirDialogoEditarSucursal(sucursal)}
-                                  className="gap-2"
+                                  className="gap-2 flex-1"
                                 >
                                   <Pencil className="h-4 w-4" />
                                   Editar
@@ -618,17 +961,17 @@ export default function Configuracion() {
                                   variant="destructive"
                                   size="sm"
                                   onClick={() => handleEliminarSucursal(sucursal.id_sucursal)}
-                                  className="gap-2"
+                                  className="gap-2 flex-1"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                   Eliminar
                                 </Button>
                               </div>
-                            </TableCell>
-                          </TableRow>
+                            </CardContent>
+                          </Card>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -636,12 +979,13 @@ export default function Configuracion() {
               {/* Card para asignar sucursales a usuarios */}
               <Card className="bg-white border-gray-200">
                 <CardHeader>
-                  <CardTitle className="text-gray-900 flex items-center justify-between gap-2">
+                  <CardTitle className="text-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Users className="h-5 w-5" />
-                      Asignar Sucursales a Usuarios
+                      Usuarios y Roles
                     </div>
-                    <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios}>
+                    <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios} className="w-full sm:w-auto gap-2">
+                      <RefreshCw className={`h-4 w-4 ${loadingUsuarios ? 'animate-spin' : ''}`} />
                       {loadingUsuarios ? "Actualizando..." : "Actualizar"}
                     </Button>
                   </CardTitle>
@@ -656,40 +1000,90 @@ export default function Configuracion() {
                       <p className="text-gray-600">No hay usuarios registrados.</p>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Usuario</TableHead>
-                          <TableHead>Sucursal Asignada</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    <>
+                      {/* Vista desktop - Tabla */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Usuario</TableHead>
+                              <TableHead>Sucursal Asignada</TableHead>
+                              <TableHead className="text-right">Acciones</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {usuarios.map((usuario) => (
+                              <TableRow key={usuario.id_usuario}>
+                                <TableCell className="font-medium">{usuario.nombre_usuario}</TableCell>
+                                <TableCell>
+                                  {usuario.sucursal ? (
+                                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm flex items-center gap-2 w-fit">
+                                      <MapPin className="h-3 w-3" />
+                                      {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-500 text-sm flex items-center gap-2">
+                                      <XCircle className="h-3 w-3" />
+                                      Sin sucursal asignada
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => abrirDialogoAsignarSucursal(usuario.id_usuario)}
+                                    className="gap-2"
+                                  >
+                                    <MapPin className="h-4 w-4" />
+                                    {usuario.sucursal ? 'Cambiar Sucursal' : 'Asignar Sucursal'}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Vista móvil - Cards */}
+                      <div className="md:hidden space-y-4">
                         {usuarios.map((usuario) => (
-                          <TableRow key={usuario.id_usuario}>
-                            <TableCell className="font-medium">{usuario.nombre_usuario}</TableCell>
-                            <TableCell>
-                              {usuario.sucursal ? (
-                                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm">
-                                  {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500 text-sm">Sin sucursal asignada</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
+                          <Card key={usuario.id_usuario} className="border-2">
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex items-center gap-2">
+                                <User className="h-5 w-5 text-gray-600" />
+                                <p className="font-semibold text-lg">{usuario.nombre_usuario}</p>
+                              </div>
+
+                              <div className="space-y-2">
+                                <p className="text-xs text-gray-500">Sucursal asignada:</p>
+                                {usuario.sucursal ? (
+                                  <span className="px-3 py-2 bg-blue-100 text-blue-800 rounded-lg text-sm flex items-center gap-2 w-fit">
+                                    <MapPin className="h-4 w-4" />
+                                    {usuario.sucursal.iniciales} - {usuario.sucursal.nombre}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500 text-sm flex items-center gap-2">
+                                    <XCircle className="h-4 w-4" />
+                                    Sin sucursal asignada
+                                  </span>
+                                )}
+                              </div>
+
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => abrirDialogoAsignarSucursal(usuario.id_usuario)}
+                                className="w-full gap-2"
                               >
+                                <MapPin className="h-4 w-4" />
                                 {usuario.sucursal ? 'Cambiar Sucursal' : 'Asignar Sucursal'}
                               </Button>
-                            </TableCell>
-                          </TableRow>
+                            </CardContent>
+                          </Card>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -707,7 +1101,10 @@ export default function Configuracion() {
                 <form onSubmit={handleCrearSucursal}>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="crear-iniciales">Iniciales</Label>
+                      <Label htmlFor="crear-iniciales" className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Iniciales
+                      </Label>
                       <Input
                         id="crear-iniciales"
                         value={formSucursal.iniciales}
@@ -719,7 +1116,10 @@ export default function Configuracion() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="crear-nombre">Nombre</Label>
+                      <Label htmlFor="crear-nombre" className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Nombre
+                      </Label>
                       <Input
                         id="crear-nombre"
                         value={formSucursal.nombre}
@@ -748,7 +1148,10 @@ export default function Configuracion() {
                     }}>
                       Cancelar
                     </Button>
-                    <Button type="submit">Crear Sucursal</Button>
+                    <Button type="submit" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Crear Sucursal
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -766,7 +1169,10 @@ export default function Configuracion() {
                 <form onSubmit={handleEditarSucursal}>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="editar-iniciales">Iniciales</Label>
+                      <Label htmlFor="editar-iniciales" className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Iniciales
+                      </Label>
                       <Input
                         id="editar-iniciales"
                         value={formSucursal.iniciales}
@@ -778,7 +1184,10 @@ export default function Configuracion() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="editar-nombre">Nombre</Label>
+                      <Label htmlFor="editar-nombre" className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Nombre
+                      </Label>
                       <Input
                         id="editar-nombre"
                         value={formSucursal.nombre}
@@ -808,7 +1217,10 @@ export default function Configuracion() {
                     }}>
                       Cancelar
                     </Button>
-                    <Button type="submit">Guardar Cambios</Button>
+                    <Button type="submit" className="gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Guardar Cambios
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -835,7 +1247,10 @@ export default function Configuracion() {
                     )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="asignar-sucursal">Sucursal</Label>
+                      <Label htmlFor="asignar-sucursal" className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Sucursal
+                      </Label>
                       <Select value={sucursalIdAsignar} onValueChange={setSucursalIdAsignar} required>
                         <SelectTrigger id="asignar-sucursal">
                           <SelectValue placeholder="Selecciona una sucursal" />
@@ -864,7 +1279,10 @@ export default function Configuracion() {
                     }}>
                       Cancelar
                     </Button>
-                    <Button type="submit">Asignar Sucursal</Button>
+                    <Button type="submit" className="gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Asignar Sucursal
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>

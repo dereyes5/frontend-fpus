@@ -31,15 +31,13 @@ import logo from "../assets/img/FUNDACASDION.png";
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, permisos, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dialogPasswordOpen, setDialogPasswordOpen] = useState(false);
   const [passwordActual, setPasswordActual] = useState("");
   const [passwordNueva, setPasswordNueva] = useState("");
   const [passwordConfirmar, setPasswordConfirmar] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const esAdministrador = user?.roles.some(rol => rol.nombre === "ADMINISTRADOR");
 
   const handleLogout = () => {
     logout();
@@ -78,30 +76,24 @@ export default function Layout() {
   };
 
   const menuItems = [
-    { path: "/", label: "Dashboard", icon: LayoutDashboard, requiredRole: null },
-    { path: "/benefactores", label: "Benefactores", icon: Users, requiredRole: ["EJECUTIVO", "ADMINISTRADOR"] },
-    { path: "/aprobaciones", label: "Aprobaciones", icon: CheckSquare, requiredRole: ["ADMINISTRADOR"] },
-    { path: "/cartera", label: "Cartera", icon: Wallet, requiredRole: ["EJECUTIVO_CONTABLE", "ADMINISTRADOR"] },
-    { path: "/social", label: "Social", icon: Heart, requiredRole: ["EJECUTIVO_SOCIAL", "ADMINISTRADOR"] },
+    { path: "/", label: "Dashboard", icon: LayoutDashboard, requiredPermission: null },
+    { path: "/benefactores", label: "Benefactores", icon: Users, requiredPermission: "benefactores_lectura" },
+    { path: "/aprobaciones", label: "Aprobaciones", icon: CheckSquare, requiredPermission: "aprobaciones" },
+    { path: "/cartera", label: "Cartera", icon: Wallet, requiredPermission: "cartera_lectura" },
+    { path: "/social", label: "Social", icon: Heart, requiredPermission: "social_lectura" },
+    { path: "/configuracion", label: "Configuración", icon: Settings, requiredPermission: "configuraciones" },
   ];
 
-  // Agregar configuración solo para administradores
-  if (esAdministrador) {
-    menuItems.push({ path: "/configuracion", label: "Configuración", icon: Settings, requiredRole: ["ADMINISTRADOR"] });
-  }
-
-  // Filtrar elementos del menú según roles del usuario
+  // Filtrar elementos del menú según permisos del usuario
   const visibleMenuItems = menuItems.filter(item => {
     // Dashboard siempre visible
-    if (!item.requiredRole) return true;
+    if (!item.requiredPermission) return true;
     
-    // Si no hay usuario, no mostrar nada
-    if (!user?.roles) return false;
+    // Si no hay permisos, no mostrar nada
+    if (!permisos) return false;
     
-    // Verificar si el usuario tiene alguno de los roles requeridos
-    return user.roles.some(userRole => 
-      item.requiredRole.includes(userRole.nombre)
-    );
+    // Verificar si el usuario tiene el permiso requerido
+    return permisos[item.requiredPermission as keyof typeof permisos] === true;
   });
 
   const isActive = (path: string) => {
@@ -119,14 +111,28 @@ export default function Layout() {
       <header className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] border-b border-[#1b76b9]/20 sticky top-0 z-40 shadow-md">
         <div className="flex items-center justify-between px-6 py-4 relative">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden text-white hover:bg-white/20"
+            <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden p-2 rounded-md bg-white/10 hover:bg-white/20 active:bg-white/30 transition-colors"
+              aria-label="Toggle menu"
             >
-              <Menu className="h-5 w-5" />
-            </Button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-white"
+              >
+                <line x1="4" x2="20" y1="12" y2="12" />
+                <line x1="4" x2="20" y1="6" y2="6" />
+                <line x1="4" x2="20" y1="18" y2="18" />
+              </svg>
+            </button>
             <div className="flex items-center gap-3">
               <img 
                 src={logo} 
@@ -141,7 +147,7 @@ export default function Layout() {
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-white drop-shadow">{user.nombre_usuario}</p>
               <p className="text-xs text-white/80">
-                {user.roles.length > 0 ? user.roles[0].nombre : 'Usuario'}
+                Usuario del Sistema
               </p>
             </div>
             <DropdownMenu>
@@ -157,7 +163,7 @@ export default function Layout() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.nombre_usuario}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {user.roles.length > 0 ? user.roles[0].nombre : 'Usuario'}
+                      Usuario del Sistema
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -166,7 +172,7 @@ export default function Layout() {
                   <Key className="mr-2 h-4 w-4" />
                   <span>Cambiar contraseña</span>
                 </DropdownMenuItem>
-                {esAdministrador && (
+                {permisos?.configuraciones && (
                   <DropdownMenuItem onClick={() => navigate("/configuracion")} className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Configuración</span>

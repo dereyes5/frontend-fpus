@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { Link } from "react-router";
-import { Plus, Search, Eye, Users, User, Upload, FileText, AlertCircle, X } from "lucide-react";
+import { Plus, Search, Eye, Users, User, Upload, FileText, AlertCircle, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -15,6 +15,15 @@ import { benefactoresService } from "../services/benefactores.service";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import type { Benefactor } from "../types";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 
 /** ====== Provincias (cédula) ====== */
 const provinciasEcuadorPorCodigo: Record<string, string> = {
@@ -104,8 +113,8 @@ const ciudadesPorProvincia: Record<string, string[]> = {
 const provinciasSelector = Object.keys(ciudadesPorProvincia);
 
 export default function Benefactores() {
-  const { user } = useAuth();
-  const esAdmin = user?.roles?.some((r) => r.nombre === "ADMINISTRADOR") ?? false;
+  const { user, permisos } = useAuth();
+  const puedeEditar = permisos?.benefactores_escritura ?? false;
 
   const [benefactores, setBenefactores] = useState<Benefactor[]>([]);
 
@@ -131,10 +140,14 @@ export default function Benefactores() {
   const [guardando, setGuardando] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [tipoFilter, setTipoFilter] = useState("todos");
+  // Estados para filtros
   const [estadoFilter, setEstadoFilter] = useState("todos");
   const [ciudadFilter, setCiudadFilter] = useState("todos");
+  const [globalFilter, setGlobalFilter] = useState("");
+  
+  // Estados para react-table - Separados para cada tabla para evitar crashes
+  const [sortingTitulares, setSortingTitulares] = useState<SortingState>([]);
+  const [sortingDependientes, setSortingDependientes] = useState<SortingState>([]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [tipoAfiliacion, setTipoAfiliacion] = useState("individual");
@@ -233,8 +246,8 @@ export default function Benefactores() {
       const todosTitulares = data.filter((b) => b.tipo_benefactor === "TITULAR");
       setTitularesDB(todosTitulares);
 
-      // Vista de tabla: ADMIN ve todo; EJECUTIVO ve los suyos aprobados
-      const benefactoresVisibles = esAdmin
+      // Vista de tabla: si puede editar ve todo; si no, ve los suyos aprobados
+      const benefactoresVisibles = puedeEditar
         ? data
         : data.filter((b) => b.id_usuario === user?.id_usuario && b.estado_registro === "APROBADO");
 
@@ -362,24 +375,220 @@ export default function Benefactores() {
     }
   };
 
-  const titularesVisiblesEnTabla = benefactores.filter((b) => b.tipo_benefactor === "TITULAR");
-  const dependientesVisiblesEnTabla = benefactores.filter((b) => b.tipo_benefactor === "DEPENDIENTE");
+  // Memoizar listas visibles para evitar recálculos innecesarios
+  const titularesVisiblesEnTabla = useMemo(
+    () => benefactores.filter((b) => b.tipo_benefactor === "TITULAR"),
+    [benefactores]
+  );
+  
+  const dependientesVisiblesEnTabla = useMemo(
+    () => benefactores.filter((b) => b.tipo_benefactor === "DEPENDIENTE"),
+    [benefactores]
+  );
 
-  const filteredBenefactores = benefactores.filter((benefactor) => {
-    const matchesSearch =
-      benefactor.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (benefactor.cedula || "").includes(searchTerm) ||
-      (benefactor.n_convenio || "").toLowerCase().includes(searchTerm.toLowerCase());
+  // Definición de columnas para titulares
+  const columnasTitulares: ColumnDef<Benefactor>[] = useMemo(
+    () => [
+      {
+        accessorKey: "n_convenio",
+        header: "N° Convenio",
+        cell: ({ row }) => (
+          <span className="font-mono text-sm">{row.original.n_convenio || row.original.cedula}</span>
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: "nombre_completo",
+        header: "Nombre Completo",
+        cell: ({ row }) => <span className="font-medium">{row.original.nombre_completo}</span>,
+        enableSorting: true,
+      },
+      {
+        accessorKey: "tipo_benefactor",
+        header: "Tipo",
+        cell: ({ row }) => (
+          <Badge variant="outline" className="border-blue-500 text-blue-700">
+            {row.original.tipo_benefactor}
+          </Badge>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "ciudad",
+        header: "Ciudad",
+        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.ciudad}</span>,
+        enableSorting: true,
+      },
+      {
+        accessorKey: "estado",
+        header: "Estado",
+        cell: ({ row }) => (
+          <Badge
+            className={
+              row.original.estado === "ACTIVO"
+                ? "bg-green-500 hover:bg-green-600 text-white"
+                : "bg-gray-400 hover:bg-gray-500 text-white"
+            }
+          >
+            {row.original.estado}
+          </Badge>
+        ),
+        enableSorting: true,
+      },
+      {
+        id: "acciones",
+        header: () => <div className="text-right">Acciones</div>,
+        cell: ({ row }) => (
+          <div className="text-right">
+            <Link to={`/benefactores/${row.original.id_benefactor}`}>
+              <Button variant="ghost" size="sm">
+                <Eye className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Ver detalles</span>
+                <span className="sm:hidden">Ver</span>
+              </Button>
+            </Link>
+          </div>
+        ),
+        enableSorting: false,
+      },
+    ],
+    []
+  );
 
-    const matchesTipo = tipoFilter === "todos" || benefactor.tipo_benefactor === tipoFilter;
-    const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
-    const matchesCiudad = ciudadFilter === "todos" || benefactor.ciudad === ciudadFilter;
+  // Definición de columnas para dependientes
+  const columnasDependientes: ColumnDef<Benefactor>[] = useMemo(
+    () => [
+      {
+        accessorKey: "n_convenio",
+        header: "N° Convenio",
+        cell: ({ row }) => (
+          <span className="font-mono text-sm">{row.original.n_convenio || row.original.cedula}</span>
+        ),
+        enableSorting: true,
+      },
+      {
+        accessorKey: "nombre_completo",
+        header: "Nombre Completo",
+        cell: ({ row }) => <span className="font-medium">{row.original.nombre_completo}</span>,
+        enableSorting: true,
+      },
+      {
+        accessorKey: "tipo_benefactor",
+        header: "Tipo",
+        cell: ({ row }) => (
+          <Badge variant="outline" className="border-purple-500 text-purple-700">
+            {row.original.tipo_benefactor}
+          </Badge>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "ciudad",
+        header: "Ciudad",
+        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.ciudad}</span>,
+        enableSorting: true,
+      },
+      {
+        accessorKey: "estado",
+        header: "Estado",
+        cell: ({ row }) => (
+          <Badge
+            className={
+              row.original.estado === "ACTIVO"
+                ? "bg-green-500 hover:bg-green-600 text-white"
+                : "bg-gray-400 hover:bg-gray-500 text-white"
+            }
+          >
+            {row.original.estado}
+          </Badge>
+        ),
+        enableSorting: true,
+      },
+      {
+        id: "acciones",
+        header: () => <div className="text-right">Acciones</div>,
+        cell: ({ row }) => (
+          <div className="text-right">
+            <Link to={`/benefactores/${row.original.id_benefactor}`}>
+              <Button variant="ghost" size="sm">
+                <Eye className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Ver detalles</span>
+                <span className="sm:hidden">Ver</span>
+              </Button>
+            </Link>
+          </div>
+        ),
+        enableSorting: false,
+      },
+    ],
+    []
+  );
 
-    return matchesSearch && matchesTipo && matchesEstado && matchesCiudad;
+  // Datos filtrados para titulares
+  const datosTitularesFiltrados = useMemo(() => {
+    return titularesVisiblesEnTabla.filter((benefactor) => {
+      const matchesSearch =
+        benefactor.nombre_completo.toLowerCase().includes(globalFilter.toLowerCase()) ||
+        (benefactor.cedula || "").includes(globalFilter) ||
+        (benefactor.n_convenio || "").toLowerCase().includes(globalFilter.toLowerCase());
+
+      const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
+      const matchesCiudad = ciudadFilter === "todos" || benefactor.ciudad === ciudadFilter;
+
+      return matchesSearch && matchesEstado && matchesCiudad;
+    });
+  }, [titularesVisiblesEnTabla, globalFilter, estadoFilter, ciudadFilter]);
+
+  // Datos filtrados para dependientes
+  const datosDependientesFiltrados = useMemo(() => {
+    return dependientesVisiblesEnTabla.filter((benefactor) => {
+      const matchesSearch =
+        benefactor.nombre_completo.toLowerCase().includes(globalFilter.toLowerCase()) ||
+        (benefactor.cedula || "").includes(globalFilter) ||
+        (benefactor.n_convenio || "").toLowerCase().includes(globalFilter.toLowerCase());
+
+      const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
+      const matchesCiudad = ciudadFilter === "todos" || benefactor.ciudad === ciudadFilter;
+
+      return matchesSearch && matchesEstado && matchesCiudad;
+    });
+  }, [dependientesVisiblesEnTabla, globalFilter, estadoFilter, ciudadFilter]);
+
+  // Tabla para titulares
+  const tablaTitulares = useReactTable({
+    data: datosTitularesFiltrados,
+    columns: columnasTitulares,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSortingTitulares,
+    state: {
+      sorting: sortingTitulares,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   });
 
-  const filteredTitulares = filteredBenefactores.filter((b) => b.tipo_benefactor === "TITULAR");
-  const filteredDependientes = filteredBenefactores.filter((b) => b.tipo_benefactor === "DEPENDIENTE");
+  // Tabla para dependientes
+  const tablaDependientes = useReactTable({
+    data: datosDependientesFiltrados,
+    columns: columnasDependientes,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSortingDependientes,
+    state: {
+      sorting: sortingDependientes,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+  });
 
   const ciudadesDisponibles = useMemo(() => (provincia ? ciudadesPorProvincia[provincia] ?? [] : []), [provincia]);
   const provinciaPorCedula = useMemo(() => getProvinciaNombreDesdeCedula(cedula), [cedula]);
@@ -413,7 +622,7 @@ export default function Benefactores() {
           <p className="text-white/90">Gestión de benefactores titulares y dependientes</p>
         </div>
 
-        {!esAdmin ? (
+        {puedeEditar ? (
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -875,27 +1084,16 @@ export default function Benefactores() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="relative md:col-span-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar por nombre, cédula o convenio"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
               className="pl-10"
             />
           </div>
-
-          <Select value={tipoFilter} onValueChange={setTipoFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filtrar por tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los tipos</SelectItem>
-              <SelectItem value="TITULAR">Titular</SelectItem>
-              <SelectItem value="DEPENDIENTE">Dependiente</SelectItem>
-            </SelectContent>
-          </Select>
 
           <Select value={estadoFilter} onValueChange={setEstadoFilter}>
             <SelectTrigger>
@@ -904,8 +1102,7 @@ export default function Benefactores() {
             <SelectContent>
               <SelectItem value="todos">Todos los estados</SelectItem>
               <SelectItem value="ACTIVO">Activo</SelectItem>
-              <SelectItem value="INACTIVO">Inactivo</SelectItem>
-              <SelectItem value="Inactivo">Inactivo</SelectItem>
+              <SelectItem value="CANCELADO">Cancelado</SelectItem>
             </SelectContent>
           </Select>
 
@@ -929,138 +1126,362 @@ export default function Benefactores() {
 
       {/* Tabs */}
       <Tabs defaultValue="titulares" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="titulares">Titulares ({filteredTitulares.length})</TabsTrigger>
-          <TabsTrigger value="dependientes">Dependientes ({filteredDependientes.length})</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 h-auto sm:max-w-md">
+          <TabsTrigger value="titulares" className="text-sm sm:text-base py-2">
+            Titulares ({datosTitularesFiltrados.length})
+          </TabsTrigger>
+          <TabsTrigger value="dependientes" className="text-sm sm:text-base py-2">
+            Dependientes ({datosDependientesFiltrados.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="titulares" className="mt-6">
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="text-gray-700 font-semibold">N° Convenio</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Nombre Completo</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Tipo</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Ciudad</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Estado</TableHead>
-                  <TableHead className="text-center text-gray-700 font-semibold">Meses Pagados</TableHead>
-                  <TableHead className="text-right text-gray-700 font-semibold">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTitulares.map((benefactor) => (
-                  <TableRow key={benefactor.id_benefactor} className="hover:bg-gray-50">
-                    <TableCell className="font-mono text-sm">{benefactor.n_convenio || benefactor.cedula}</TableCell>
-                    <TableCell>{benefactor.nombre_completo}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="border-blue-500 text-blue-700">
-                        {benefactor.tipo_benefactor}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-gray-600">{benefactor.ciudad}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          benefactor.estado === "ACTIVO"
-                            ? "bg-green-500 hover:bg-green-600 text-white"
-                            : "bg-gray-400 hover:bg-gray-500 text-white"
-                        }
-                      >
-                        {benefactor.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="inline-flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-700 rounded-full">
-                        -
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link to={`/benefactores/${benefactor.id_benefactor}`}>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver detalles
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            {/* Tabla desktop */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  {tablaTitulares.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className="bg-gray-50">
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} className="text-gray-700 font-semibold">
+                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                            <div
+                              className="flex items-center gap-2 cursor-pointer select-none hover:text-gray-900"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                const toggleSorting = header.column.getToggleSortingHandler();
+                                toggleSorting?.(e);
+                              }}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <ArrowUpDown className="h-4 w-4" />
+                            </div>
+                          ) : (
+                            flexRender(header.column.columnDef.header, header.getContext())
+                          )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {tablaTitulares.getRowModel().rows.length > 0 ? (
+                    tablaTitulares.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id} className="hover:bg-gray-50">
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={columnasTitulares.length} className="text-center py-12 text-gray-500">
+                        No se encontraron titulares con los filtros aplicados
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-            {filteredTitulares.length === 0 && (
-              <div className="text-center py-12 text-gray-500">No se encontraron titulares con los filtros aplicados</div>
-            )}
+            {/* Vista móvil - Cards */}
+            <div className="md:hidden p-4 space-y-4">
+              {tablaTitulares.getRowModel().rows.length > 0 ? (
+                tablaTitulares.getRowModel().rows.map((row) => {
+                  const benefactor = row.original;
+                  return (
+                    <Card key={benefactor.id_benefactor} className="border-2">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
+                            <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
+                          </div>
+                          <Badge
+                            className={
+                              benefactor.estado === "ACTIVO"
+                                ? "bg-green-500 hover:bg-green-600 text-white"
+                                : "bg-gray-400 hover:bg-gray-500 text-white"
+                            }
+                          >
+                            {benefactor.estado}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-gray-500">Tipo</p>
+                            <Badge variant="outline" className="border-blue-500 text-blue-700">
+                              {benefactor.tipo_benefactor}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Ciudad</p>
+                            <p className="font-medium">{benefactor.ciudad}</p>
+                          </div>
+                        </div>
+
+                        <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver detalles
+                          </Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No se encontraron titulares con los filtros aplicados
+                </div>
+              )}
+            </div>
+
+            {/* Paginación */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+              <div className="text-sm text-gray-600">
+                Mostrando {tablaTitulares.getState().pagination.pageIndex * tablaTitulares.getState().pagination.pageSize + 1} a{" "}
+                {Math.min(
+                  (tablaTitulares.getState().pagination.pageIndex + 1) * tablaTitulares.getState().pagination.pageSize,
+                  datosTitularesFiltrados.length
+                )}{" "}
+                de {datosTitularesFiltrados.length} registros
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaTitulares.setPageIndex(0)}
+                  disabled={!tablaTitulares.getCanPreviousPage()}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaTitulares.previousPage()}
+                  disabled={!tablaTitulares.getCanPreviousPage()}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Página {tablaTitulares.getState().pagination.pageIndex + 1} de {tablaTitulares.getPageCount()}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaTitulares.nextPage()}
+                  disabled={!tablaTitulares.getCanNextPage()}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaTitulares.setPageIndex(tablaTitulares.getPageCount() - 1)}
+                  disabled={!tablaTitulares.getCanNextPage()}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select
+                value={tablaTitulares.getState().pagination.pageSize.toString()}
+                onValueChange={(value) => tablaTitulares.setPageSize(Number(value))}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 30, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={pageSize.toString()}>
+                      {pageSize} por página
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="dependientes" className="mt-6">
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="text-gray-700 font-semibold">N° Convenio</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Nombre Completo</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Tipo</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Ciudad</TableHead>
-                  <TableHead className="text-gray-700 font-semibold">Estado</TableHead>
-                  <TableHead className="text-center text-gray-700 font-semibold">Meses Pagados</TableHead>
-                  <TableHead className="text-right text-gray-700 font-semibold">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDependientes.map((benefactor) => (
-                  <TableRow key={benefactor.id_benefactor} className="hover:bg-gray-50">
-                    <TableCell className="font-mono text-sm">{benefactor.n_convenio || benefactor.cedula}</TableCell>
-                    <TableCell>{benefactor.nombre_completo}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="border-purple-500 text-purple-700">
-                        {benefactor.tipo_benefactor}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-gray-600">{benefactor.ciudad}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          benefactor.estado === "ACTIVO"
-                            ? "bg-green-500 hover:bg-green-600 text-white"
-                            : "bg-gray-400 hover:bg-gray-500 text-white"
-                        }
-                      >
-                        {benefactor.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="inline-flex items-center justify-center w-10 h-10 bg-purple-100 text-purple-700 rounded-full">
-                        -
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link to={`/benefactores/${benefactor.id_benefactor}`}>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver detalles
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            {/* Tabla desktop */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  {tablaDependientes.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className="bg-gray-50">
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} className="text-gray-700 font-semibold">
+                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                            <div
+                              className="flex items-center gap-2 cursor-pointer select-none hover:text-gray-900"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                const toggleSorting = header.column.getToggleSortingHandler();
+                                toggleSorting?.(e);
+                              }}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <ArrowUpDown className="h-4 w-4" />
+                            </div>
+                          ) : (
+                            flexRender(header.column.columnDef.header, header.getContext())
+                          )}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {tablaDependientes.getRowModel().rows.length > 0 ? (
+                    tablaDependientes.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id} className="hover:bg-gray-50">
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={columnasDependientes.length} className="text-center py-12 text-gray-500">
+                        No se encontraron dependientes con los filtros aplicados
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-            {filteredDependientes.length === 0 && (
-              <div className="text-center py-12 text-gray-500">No se encontraron dependientes con los filtros aplicados</div>
-            )}
+            {/* Vista móvil - Cards */}
+            <div className="md:hidden p-4 space-y-4">
+              {tablaDependientes.getRowModel().rows.length > 0 ? (
+                tablaDependientes.getRowModel().rows.map((row) => {
+                  const benefactor = row.original;
+                  return (
+                    <Card key={benefactor.id_benefactor} className="border-2">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
+                            <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
+                          </div>
+                          <Badge
+                            className={
+                              benefactor.estado === "ACTIVO"
+                                ? "bg-green-500 hover:bg-green-600 text-white"
+                                : "bg-gray-400 hover:bg-gray-500 text-white"
+                            }
+                          >
+                            {benefactor.estado}
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-gray-500">Tipo</p>
+                            <Badge variant="outline" className="border-purple-500 text-purple-700">
+                              {benefactor.tipo_benefactor}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Ciudad</p>
+                            <p className="font-medium">{benefactor.ciudad}</p>
+                          </div>
+                        </div>
+
+                        <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver detalles
+                          </Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No se encontraron dependientes con los filtros aplicados
+                </div>
+              )}
+            </div>
+
+            {/* Paginación */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+              <div className="text-sm text-gray-600">
+                Mostrando {tablaDependientes.getState().pagination.pageIndex * tablaDependientes.getState().pagination.pageSize + 1} a{" "}
+                {Math.min(
+                  (tablaDependientes.getState().pagination.pageIndex + 1) * tablaDependientes.getState().pagination.pageSize,
+                  datosDependientesFiltrados.length
+                )}{" "}
+                de {datosDependientesFiltrados.length} registros
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaDependientes.setPageIndex(0)}
+                  disabled={!tablaDependientes.getCanPreviousPage()}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaDependientes.previousPage()}
+                  disabled={!tablaDependientes.getCanPreviousPage()}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Página {tablaDependientes.getState().pagination.pageIndex + 1} de {tablaDependientes.getPageCount()}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaDependientes.nextPage()}
+                  disabled={!tablaDependientes.getCanNextPage()}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tablaDependientes.setPageIndex(tablaDependientes.getPageCount() - 1)}
+                  disabled={!tablaDependientes.getCanNextPage()}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select
+                value={tablaDependientes.getState().pagination.pageSize.toString()}
+                onValueChange={(value) => tablaDependientes.setPageSize(Number(value))}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 30, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={pageSize.toString()}>
+                      {pageSize} por página
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
 
       <div className="text-sm text-gray-600 bg-white rounded-lg p-4 border border-gray-200">
-        Mostrando {filteredBenefactores.length} de {benefactores.length} benefactores
+        Mostrando {datosTitularesFiltrados.length + datosDependientesFiltrados.length} benefactores en total
       </div>
     </div>
   );
