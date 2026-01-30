@@ -43,6 +43,13 @@ export interface Permisos {
   };
 }
 
+// LEGACY - Sistema antiguo de roles (mantener para servicios legacy)
+export interface Rol {
+  id_rol: number;
+  nombre: string;
+  descripcion?: string;
+}
+
 export interface MisPermisosResponse {
   success: boolean;
   data: {

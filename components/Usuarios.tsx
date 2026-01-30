@@ -59,7 +59,6 @@ interface Rol {
 }
 
 export default function Usuarios() {
-  const { user: usuarioActual } = useAuth();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -92,7 +91,7 @@ export default function Usuarios() {
       setLoading(true);
       const [usuariosRes, rolesRes, sucursalesRes] = await Promise.all([
         authService.obtenerUsuarios(),
-        rolesService.listarRoles(),
+        rolesService.getRoles(),
         sucursalesService.listarSucursales(),
       ]);
 
