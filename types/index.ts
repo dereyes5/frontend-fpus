@@ -2,6 +2,7 @@
 export interface Usuario {
   id_usuario: number;
   nombre_usuario: string;
+  cargo?: string;
   permisos: PermisosGranulares;
 }
 

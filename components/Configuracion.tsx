@@ -40,6 +40,7 @@ import { PermisosGranulares } from "../types";
 interface UsuarioConPermisos {
   id_usuario: number;
   nombre_usuario: string;
+  cargo?: string;
   permisos?: PermisosGranulares | null;
   id_sucursal?: number;
   sucursal?: {
@@ -82,6 +83,8 @@ export default function Configuracion() {
   const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [keyFoto, setKeyFoto] = useState(Date.now()); // Para forzar refresh de la imagen
+  const [cargoPerfil, setCargoPerfil] = useState("");
+  const [guardandoCargo, setGuardandoCargo] = useState(false);
 
   const puedeConfigurar = permisos?.configuraciones ?? false;
 
@@ -297,6 +300,37 @@ export default function Configuracion() {
     }
   }, [user, keyFoto]);
 
+  useEffect(() => {
+    setCargoPerfil((user?.cargo || "AGENTE").toUpperCase());
+  }, [user?.cargo]);
+
+  const handleActualizarCargo = async () => {
+    const cargo = cargoPerfil.trim().toUpperCase();
+    if (!cargo) {
+      toast.error("El cargo es obligatorio");
+      return;
+    }
+
+    try {
+      setGuardandoCargo(true);
+      const response = await authService.actualizarCargoPerfil(cargo);
+
+      const rawUser = localStorage.getItem("fpus_user");
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        parsed.cargo = response?.data?.cargo || cargo;
+        localStorage.setItem("fpus_user", JSON.stringify(parsed));
+      }
+
+      toast.success("Cargo actualizado exitosamente");
+      window.location.reload();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar cargo");
+    } finally {
+      setGuardandoCargo(false);
+    }
+  };
+
   const handleSubirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -433,7 +467,7 @@ export default function Configuracion() {
                 </div>
                 <div className="flex-1 text-center sm:text-left">
                   <h3 className="text-2xl font-semibold text-gray-900">{user?.nombre_usuario}</h3>
-                  <p className="text-gray-600 mt-1">Usuario del Sistema</p>
+                  <p className="text-gray-600 mt-1">{user?.cargo || "AGENTE"}</p>
                   <div className="flex flex-wrap gap-2 mt-4 justify-center sm:justify-start">
                     <label htmlFor="foto-perfil-input-btn">
                       <Button
@@ -477,6 +511,29 @@ export default function Configuracion() {
                   />
                 </div>
 
+                <div>
+                  <Label className="text-gray-600 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Cargo
+                  </Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={cargoPerfil}
+                      onChange={(e) => setCargoPerfil(e.target.value.toUpperCase())}
+                      placeholder="AGENTE"
+                      maxLength={100}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleActualizarCargo}
+                      disabled={guardandoCargo || !cargoPerfil.trim()}
+                      className="bg-[#0F8F5B] hover:bg-[#0d7a4d] text-white"
+                    >
+                      {guardandoCargo ? "Guardando..." : "Guardar"}
+                    </Button>
+                  </div>
+                </div>
+
                 {permisos && (
                   <div>
                     <Label className="text-gray-600 flex items-center gap-2">
@@ -500,7 +557,7 @@ export default function Configuracion() {
 
               <div className="pt-4 border-t">
                 <p className="text-sm text-gray-600">
-                  Para actualizar tu información de perfil, contacta al administrador del sistema.
+                  Puedes actualizar tu cargo desde este perfil.
                 </p>
               </div>
             </CardContent>

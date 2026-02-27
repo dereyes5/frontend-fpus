@@ -20,6 +20,12 @@ export const authService = {
     return response.data;
   },
 
+  // Actualizar cargo del perfil actual
+  async actualizarCargoPerfil(cargo: string): Promise<ApiResponse<Usuario>> {
+    const response = await api.put<ApiResponse<Usuario>>('/auth/perfil/cargo', { cargo });
+    return response.data;
+  },
+
   // Cambiar contraseña
   async cambiarPassword(data: CambiarPasswordRequest): Promise<ApiResponse<void>> {
     const response = await api.put<ApiResponse<void>>('/auth/cambiar-password', data);
@@ -63,6 +69,7 @@ export const authService = {
   async obtenerUsuarios(): Promise<ApiResponse<Array<{
     id_usuario: number;
     nombre_usuario: string;
+    cargo?: string;
     roles: Array<{ id_rol: number; nombre: string }>;
     id_sucursal?: number;
     sucursal?: {
@@ -74,6 +81,7 @@ export const authService = {
     const response = await api.get<ApiResponse<Array<{
       id_usuario: number;
       nombre_usuario: string;
+      cargo?: string;
       roles: Array<{ id_rol: number; nombre: string }>;
       id_sucursal?: number;
       sucursal?: {
@@ -89,6 +97,7 @@ export const authService = {
   async listarUsuarios(): Promise<ApiResponse<Array<{
     id_usuario: number;
     nombre_usuario: string;
+    cargo?: string;
     roles: Array<{ id_rol: number; nombre: string }>;
     id_sucursal?: number;
     sucursal?: {

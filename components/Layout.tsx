@@ -229,7 +229,7 @@ export default function Layout() {
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-white drop-shadow">{user.nombre_usuario}</p>
               <p className="text-xs text-white/80">
-                Usuario del Sistema
+                {user.cargo || 'AGENTE'}
               </p>
             </div>
 
@@ -259,7 +259,7 @@ export default function Layout() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.nombre_usuario}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      Usuario del Sistema
+                      {user.cargo || 'AGENTE'}
                     </p>
                   </div>
                 </DropdownMenuLabel>
