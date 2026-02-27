@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2, Lock, RefreshCw, CheckCircle2, XCircle, MapPin } from "lucide-react";
+import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2, Lock, RefreshCw, CheckCircle2, XCircle, MapPin, Landmark, Camera, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import Bancos from "./Bancos";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -32,6 +33,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/auth.service";
 import sucursalesService, { Sucursal, CrearSucursalDto } from "../services/sucursales.service";
+import { fotoPerfilService } from "../services/fotoPerfil.service";
 import { toast } from "sonner";
 import { PermisosGranulares } from "../types";
 
@@ -49,7 +51,7 @@ interface UsuarioConPermisos {
 
 export default function Configuracion() {
   const { user, permisos } = useAuth();
-  
+
   // Estados para administración de usuarios y permisos
   const [usuarios, setUsuarios] = useState<UsuarioConPermisos[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
@@ -75,6 +77,11 @@ export default function Configuracion() {
     nombre: "",
     activo: true,
   });
+
+  // Estados para foto de perfil
+  const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [keyFoto, setKeyFoto] = useState(Date.now()); // Para forzar refresh de la imagen
 
   const puedeConfigurar = permisos?.configuraciones ?? false;
 
@@ -111,13 +118,13 @@ export default function Configuracion() {
 
   // Función para actualizar un permiso individual
   const togglePermiso = async (
-    usuarioId: number, 
-    permiso: keyof PermisosGranulares, 
+    usuarioId: number,
+    permiso: keyof PermisosGranulares,
     valorActual: boolean
   ) => {
     try {
       setUpdatingPermisos(usuarioId);
-      
+
       // Obtener permisos actuales del usuario
       const usuario = usuarios.find(u => u.id_usuario === usuarioId);
       if (!usuario) {
@@ -135,6 +142,7 @@ export default function Configuracion() {
         social_escritura: false,
         configuraciones: false,
         aprobaciones: false,
+        aprobaciones_social: false,
       };
 
       // Crear objeto con todos los permisos, cambiando solo el que se está toggling
@@ -147,20 +155,21 @@ export default function Configuracion() {
         social_escritura: permisosBase.social_escritura ?? false,
         configuraciones: permisosBase.configuraciones ?? false,
         aprobaciones: permisosBase.aprobaciones ?? false,
+        aprobaciones_social: permisosBase.aprobaciones_social ?? false,
         [permiso]: !valorActual, // Toggle el permiso específico
       };
 
       await authService.actualizarPermisos(usuarioId, permisosActualizados);
-      
+
       // Actualizar solo el usuario específico en el estado local (sin recargar toda la lista)
-      setUsuarios(prevUsuarios => 
-        prevUsuarios.map(u => 
-          u.id_usuario === usuarioId 
+      setUsuarios(prevUsuarios =>
+        prevUsuarios.map(u =>
+          u.id_usuario === usuarioId
             ? { ...u, permisos: permisosActualizados }
             : u
         )
       );
-      
+
       toast.success("Permiso actualizado exitosamente");
     } catch (error: any) {
       console.error("Error al actualizar permisos:", error);
@@ -222,7 +231,7 @@ export default function Configuracion() {
   const handleEditarSucursal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sucursalSeleccionada) return;
-    
+
     try {
       await sucursalesService.actualizarSucursal(sucursalSeleccionada.id_sucursal, formSucursal);
       toast.success("Sucursal actualizada exitosamente");
@@ -237,7 +246,7 @@ export default function Configuracion() {
 
   const handleEliminarSucursal = async (id: number) => {
     if (!confirm("¿Estás seguro de desactivar esta sucursal?")) return;
-    
+
     try {
       await sucursalesService.eliminarSucursal(id);
       toast.success("Sucursal desactivada exitosamente");
@@ -281,6 +290,57 @@ export default function Configuracion() {
     setOpenAsignarSucursal(true);
   };
 
+  // Funciones de foto de perfil
+  useEffect(() => {
+    if (user?.id_usuario) {
+      setFotoPerfilUrl(fotoPerfilService.obtenerUrl(user.id_usuario));
+    }
+  }, [user, keyFoto]);
+
+  const handleSubirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Solo se permiten imágenes JPG, PNG o WEBP');
+      return;
+    }
+
+    // Validar tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen no puede superar los 5MB');
+      return;
+    }
+
+    try {
+      setSubiendoFoto(true);
+      await fotoPerfilService.subirFoto(file);
+      toast.success('Foto de perfil actualizada exitosamente');
+      setKeyFoto(Date.now()); // Forzar refresh
+      // Disparar evento para actualizar en Layout
+      window.dispatchEvent(new Event('fotoPerfilActualizada'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al subir la foto');
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
+
+  const handleEliminarFoto = async () => {
+    if (!confirm('¿Estás seguro de eliminar tu foto de perfil?')) return;
+
+    try {
+      await fotoPerfilService.eliminarFoto();
+      toast.success('Foto de perfil eliminada exitosamente');
+      setKeyFoto(Date.now()); // Forzar refresh
+      // Disparar evento para actualizar en Layout
+      window.dispatchEvent(new Event('fotoPerfilActualizada'));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al eliminar la foto');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -290,7 +350,7 @@ export default function Configuracion() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5' : 'grid-cols-1 max-w-md'}`}>
+        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6' : 'grid-cols-1 max-w-md'}`}>
           <TabsTrigger value="perfil" className="text-sm sm:text-base py-3 px-4 gap-2">
             <User className="h-4 w-4" />
             Mi Perfil
@@ -321,6 +381,12 @@ export default function Configuracion() {
               Sucursales
             </TabsTrigger>
           )}
+          {puedeConfigurar && (
+            <TabsTrigger value="bancos" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <Landmark className="h-4 w-4" />
+              Bancos
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Perfil Tab */}
@@ -333,17 +399,68 @@ export default function Configuracion() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-[#1b76b9] rounded-full flex items-center justify-center">
-                  <span className="text-white text-3xl font-bold">
-                    {user?.nombre_usuario.charAt(0).toUpperCase()}
-                  </span>
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="relative group">
+                  <div className="w-32 h-32 rounded-full overflow-hidden bg-[#1b76b9] flex items-center justify-center border-4 border-gray-200 shadow-lg">
+                    {fotoPerfilUrl ? (
+                      <img
+                        key={keyFoto}
+                        src={`${fotoPerfilUrl}&t=${keyFoto}`}
+                        alt="Foto de perfil"
+                        className="w-full h-full object-cover"
+                        onError={() => setFotoPerfilUrl(null)}
+                      />
+                    ) : (
+                      <span className="text-white text-5xl font-bold">
+                        {user?.nombre_usuario.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <label
+                    htmlFor="foto-perfil-input"
+                    className="absolute bottom-0 right-0 bg-[#0F8F5B] hover:bg-[#0d7a4d] text-white rounded-full p-2 cursor-pointer shadow-lg transition-colors"
+                  >
+                    <Camera className="h-5 w-5" />
+                    <input
+                      id="foto-perfil-input"
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      onChange={handleSubirFoto}
+                      disabled={subiendoFoto}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">{user?.nombre_usuario}</h3>
-                  <p className="text-gray-600">
-                    Usuario del Sistema
-                  </p>
+                <div className="flex-1 text-center sm:text-left">
+                  <h3 className="text-2xl font-semibold text-gray-900">{user?.nombre_usuario}</h3>
+                  <p className="text-gray-600 mt-1">Usuario del Sistema</p>
+                  <div className="flex flex-wrap gap-2 mt-4 justify-center sm:justify-start">
+                    <label htmlFor="foto-perfil-input-btn">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={subiendoFoto}
+                        className="gap-2 cursor-pointer"
+                        onClick={() => document.getElementById('foto-perfil-input')?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        {fotoPerfilUrl ? 'Cambiar foto' : 'Subir foto'}
+                      </Button>
+                    </label>
+                    {fotoPerfilUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleEliminarFoto}
+                        className="gap-2 text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Eliminar foto
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -353,9 +470,9 @@ export default function Configuracion() {
                     <User className="h-4 w-4" />
                     Usuario
                   </Label>
-                  <Input 
-                    value={user?.nombre_usuario || ""} 
-                    disabled 
+                  <Input
+                    value={user?.nombre_usuario || ""}
+                    disabled
                     className="bg-gray-50"
                   />
                 </div>
@@ -416,7 +533,7 @@ export default function Configuracion() {
                             Sistema de Permisos Granulares
                           </h4>
                           <p className="text-sm text-blue-800">
-                            Controla el acceso de cada usuario a módulos específicos. 
+                            Controla el acceso de cada usuario a módulos específicos.
                             Los cambios se aplican inmediatamente pero requieren que el usuario vuelva a iniciar sesión.
                           </p>
                         </div>
@@ -425,7 +542,7 @@ export default function Configuracion() {
 
                     {/* Lista de usuarios con sus permisos */}
                     {usuarios.map((usuario) => (
-                      <div 
+                      <div
                         key={usuario.id_usuario}
                         className="p-5 border border-gray-200 rounded-lg space-y-4 bg-gray-50"
                       >
@@ -435,9 +552,7 @@ export default function Configuracion() {
                               <User className="h-4 w-4" />
                               {usuario.nombre_usuario}
                             </h3>
-                            <p className="text-xs text-gray-500 mt-1">
-                              ID: {usuario.id_usuario}
-                            </p>
+
                           </div>
                           {updatingPermisos === usuario.id_usuario && (
                             <span className="text-sm text-blue-600 flex items-center gap-2">
@@ -446,12 +561,12 @@ export default function Configuracion() {
                             </span>
                           )}
                         </div>
-                        
+
                         <div className="space-y-3">
                           <Label className="text-sm font-medium text-gray-700">
                             Permisos asignados:
                           </Label>
-                          
+
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {/* Cartera Lectura */}
                             <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
@@ -459,8 +574,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-cartera_lectura`}
                                 checked={usuario.permisos?.cartera_lectura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'cartera_lectura', 
+                                  usuario.id_usuario,
+                                  'cartera_lectura',
                                   usuario.permisos?.cartera_lectura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -484,8 +599,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-cartera_escritura`}
                                 checked={usuario.permisos?.cartera_escritura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'cartera_escritura', 
+                                  usuario.id_usuario,
+                                  'cartera_escritura',
                                   usuario.permisos?.cartera_escritura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -509,8 +624,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-benefactores_lectura`}
                                 checked={usuario.permisos?.benefactores_lectura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'benefactores_lectura', 
+                                  usuario.id_usuario,
+                                  'benefactores_lectura',
                                   usuario.permisos?.benefactores_lectura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -534,8 +649,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-benefactores_escritura`}
                                 checked={usuario.permisos?.benefactores_escritura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'benefactores_escritura', 
+                                  usuario.id_usuario,
+                                  'benefactores_escritura',
                                   usuario.permisos?.benefactores_escritura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -559,8 +674,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-social_lectura`}
                                 checked={usuario.permisos?.social_lectura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'social_lectura', 
+                                  usuario.id_usuario,
+                                  'social_lectura',
                                   usuario.permisos?.social_lectura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -584,8 +699,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-social_escritura`}
                                 checked={usuario.permisos?.social_escritura ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'social_escritura', 
+                                  usuario.id_usuario,
+                                  'social_escritura',
                                   usuario.permisos?.social_escritura ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -609,8 +724,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-configuraciones`}
                                 checked={usuario.permisos?.configuraciones ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'configuraciones', 
+                                  usuario.id_usuario,
+                                  'configuraciones',
                                   usuario.permisos?.configuraciones ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -634,8 +749,8 @@ export default function Configuracion() {
                                 id={`usuario-${usuario.id_usuario}-aprobaciones`}
                                 checked={usuario.permisos?.aprobaciones ?? false}
                                 onCheckedChange={() => togglePermiso(
-                                  usuario.id_usuario, 
-                                  'aprobaciones', 
+                                  usuario.id_usuario,
+                                  'aprobaciones',
                                   usuario.permisos?.aprobaciones ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
@@ -649,6 +764,31 @@ export default function Configuracion() {
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
                                   Aprobar o rechazar benefactores
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Aprobaciones Social */}
+                            <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
+                              <Checkbox
+                                id={`usuario-${usuario.id_usuario}-aprobaciones_social`}
+                                checked={usuario.permisos?.aprobaciones_social ?? false}
+                                onCheckedChange={() => togglePermiso(
+                                  usuario.id_usuario,
+                                  'aprobaciones_social',
+                                  usuario.permisos?.aprobaciones_social ?? false
+                                )}
+                                disabled={updatingPermisos === usuario.id_usuario}
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={`usuario-${usuario.id_usuario}-aprobaciones_social`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
+                                  Aprobaciones Social
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Aprobar o rechazar casos sociales
                                 </p>
                               </div>
                             </div>
@@ -840,8 +980,8 @@ export default function Configuracion() {
                       <Building2 className="h-5 w-5" />
                       Gestión de Sucursales
                     </div>
-                    <Button 
-                      onClick={() => setOpenCrearSucursal(true)} 
+                    <Button
+                      onClick={() => setOpenCrearSucursal(true)}
                       size="sm"
                       className="gap-2 w-full sm:w-auto"
                     >
@@ -881,11 +1021,10 @@ export default function Configuracion() {
                                 <TableCell>{sucursal.nombre}</TableCell>
                                 <TableCell>{sucursal.total_usuarios || 0}</TableCell>
                                 <TableCell>
-                                  <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 w-fit ${
-                                    sucursal.activo 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : 'bg-red-100 text-red-800'
-                                  }`}>
+                                  <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 w-fit ${sucursal.activo
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-red-100 text-red-800'
+                                    }`}>
                                     {sucursal.activo ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                     {sucursal.activo ? 'Activa' : 'Inactiva'}
                                   </span>
@@ -931,11 +1070,10 @@ export default function Configuracion() {
                                   </div>
                                   <p className="text-sm text-gray-600 mt-1">{sucursal.nombre}</p>
                                 </div>
-                                <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
-                                  sucursal.activo 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
+                                <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${sucursal.activo
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                                  }`}>
                                   {sucursal.activo ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                   {sucursal.activo ? 'Activa' : 'Inactiva'}
                                 </span>
@@ -1123,7 +1261,7 @@ export default function Configuracion() {
                       <Input
                         id="crear-nombre"
                         value={formSucursal.nombre}
-                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value })}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value.toUpperCase() })}
                         placeholder="Ej: Santo Domingo"
                         required
                       />
@@ -1191,7 +1329,7 @@ export default function Configuracion() {
                       <Input
                         id="editar-nombre"
                         value={formSucursal.nombre}
-                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value })}
+                        onChange={(e) => setFormSucursal({ ...formSucursal, nombre: e.target.value.toUpperCase() })}
                         placeholder="Ej: Santo Domingo"
                         required
                       />
@@ -1259,8 +1397,8 @@ export default function Configuracion() {
                           {sucursales
                             .filter(s => s.activo)
                             .map((sucursal) => (
-                              <SelectItem 
-                                key={sucursal.id_sucursal} 
+                              <SelectItem
+                                key={sucursal.id_sucursal}
                                 value={sucursal.id_sucursal.toString()}
                               >
                                 {sucursal.iniciales} - {sucursal.nombre}
@@ -1287,6 +1425,13 @@ export default function Configuracion() {
                 </form>
               </DialogContent>
             </Dialog>
+          </TabsContent>
+        )}
+
+        {/* Bancos Tab */}
+        {puedeConfigurar && (
+          <TabsContent value="bancos" className="mt-6">
+            <Bancos />
           </TabsContent>
         )}
       </Tabs>

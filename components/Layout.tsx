@@ -1,17 +1,19 @@
 import { Outlet, useNavigate, useLocation, Link } from "react-router";
-import { useState } from "react";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Wallet, 
-  Heart, 
+import { useState, useEffect } from "react";
+import {
+  LayoutDashboard,
+  Users,
+  Wallet,
+  Heart,
+  CheckSquare,
   LogOut,
   Settings,
-  CheckSquare,
-  Key
+  Key,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -24,8 +26,10 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/auth.service";
+import { fotoPerfilService } from "../services/fotoPerfil.service";
 import { toast } from "sonner";
 import logo from "../assets/img/FUNDACASDION.png";
+import Notificaciones from "./Notificaciones";
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -37,6 +41,41 @@ export default function Layout() {
   const [passwordNueva, setPasswordNueva] = useState("");
   const [passwordConfirmar, setPasswordConfirmar] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
+  const [keyFoto, setKeyFoto] = useState(Date.now());
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(["Aprobaciones"]); // Menús expandidos
+
+  // Cargar foto de perfil
+  useEffect(() => {
+    if (user?.id_usuario) {
+      setFotoPerfilUrl(fotoPerfilService.obtenerUrl(user.id_usuario));
+    }
+  }, [user]);
+
+  // Escuchar cambios en la foto de perfil
+  useEffect(() => {
+    const handleFotoActualizada = () => {
+      setKeyFoto(Date.now());
+      if (user?.id_usuario) {
+        setFotoPerfilUrl(fotoPerfilService.obtenerUrl(user.id_usuario));
+      }
+    };
+
+    window.addEventListener('fotoPerfilActualizada', handleFotoActualizada);
+    return () => window.removeEventListener('fotoPerfilActualizada', handleFotoActualizada);
+  }, [user]);
+
+  // Auto-expandir menú según la ruta actual
+  useEffect(() => {
+    if (location.pathname.startsWith('/aprobaciones')) {
+      setExpandedMenus(prev => {
+        if (!prev.includes('Aprobaciones')) {
+          return [...prev, 'Aprobaciones'];
+        }
+        return prev;
+      });
+    }
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -76,10 +115,33 @@ export default function Layout() {
 
   const menuItems = [
     { path: "/", label: "Dashboard", icon: LayoutDashboard, requiredPermission: null },
-    { path: "/benefactores", label: "Benefactores", icon: Users, requiredPermission: "benefactores_lectura" },
-    { path: "/aprobaciones", label: "Aprobaciones", icon: CheckSquare, requiredPermission: "aprobaciones" },
+    {
+      path: "/benefactores",
+      label: "Benefactores",
+      icon: Users,
+      requiredPermission: "benefactores_lectura"
+    },
+    {
+      path: "/aprobaciones",
+      label: "Aprobaciones",
+      icon: CheckSquare,
+      requiredPermission: "aprobaciones",
+      submenu: [
+        { path: "/aprobaciones/benefactores", label: "Aprobaciones Benefactores", requiredPermission: "aprobaciones" },
+        { path: "/aprobaciones/social", label: "Aprobaciones Social", requiredPermission: "aprobaciones_social" },
+      ]
+    },
     { path: "/cartera", label: "Cartera", icon: Wallet, requiredPermission: "cartera_lectura" },
-    { path: "/social", label: "Social", icon: Heart, requiredPermission: "social_lectura" },
+    {
+      path: "/social",
+      label: "Social",
+      icon: Heart,
+      requiredPermission: "social_lectura",
+      submenu: [
+        { path: "/social", label: "Gestión de Casos", requiredPermission: "social_lectura" },
+        { path: "/social/seguimiento", label: "Seguimiento", requiredPermission: "social_lectura" },
+      ]
+    },
     { path: "/configuracion", label: "Configuración", icon: Settings, requiredPermission: "configuraciones" },
   ];
 
@@ -87,15 +149,36 @@ export default function Layout() {
   const visibleMenuItems = menuItems.filter(item => {
     // Dashboard siempre visible
     if (!item.requiredPermission) return true;
-    
+
     // Si no hay permisos, no mostrar nada
     if (!permisos) return false;
-    
+
+    // Si tiene submenú, verificar si al menos uno de los subitems es visible
+    if (item.submenu) {
+      return item.submenu.some((subitem: any) =>
+        permisos[subitem.requiredPermission as keyof typeof permisos] === true
+      );
+    }
+
     // Verificar si el usuario tiene el permiso requerido
     return permisos[item.requiredPermission as keyof typeof permisos] === true;
   });
 
+  const toggleMenu = (label: string) => {
+    setExpandedMenus(prev =>
+      prev.includes(label)
+        ? prev.filter(item => item !== label)
+        : [...prev, label]
+    );
+  };
+
   const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    // Exact match to avoid /social matching /social/seguimiento
+    return location.pathname === path;
+  };
+
+  const isGroupActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
   };
@@ -133,12 +216,12 @@ export default function Layout() {
               </svg>
             </button>
             <div className="flex items-center gap-3">
-              <img 
-                src={logo} 
-                alt="Fundación FPUS" 
+              <img
+                src={logo}
+                alt="Fundación FPUS"
                 className="h-12 w-auto drop-shadow-lg"
               />
-              
+
             </div>
           </div>
 
@@ -149,12 +232,26 @@ export default function Layout() {
                 Usuario del Sistema
               </p>
             </div>
+
+            {/* Notificaciones */}
+            <Notificaciones />
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="w-10 h-10 bg-gradient-to-br from-white to-white/80 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/30 hover:ring-white/50 transition-all cursor-pointer">
-                  <span className="text-[#1b76b9] text-sm font-bold">
-                    {user.nombre_usuario.charAt(0).toUpperCase()}
-                  </span>
+                <button className="w-12 h-12 bg-gradient-to-br from-white to-white/80 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/30 hover:ring-white/50 transition-all cursor-pointer overflow-hidden">
+                  {fotoPerfilUrl ? (
+                    <img
+                      key={keyFoto}
+                      src={`${fotoPerfilUrl}&t=${keyFoto}`}
+                      alt="Foto de perfil"
+                      className="w-full h-full object-cover"
+                      onError={() => setFotoPerfilUrl(null)}
+                    />
+                  ) : (
+                    <span className="text-[#1b76b9] text-base font-bold">
+                      {user.nombre_usuario.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -199,23 +296,91 @@ export default function Layout() {
           <nav className="p-4 space-y-1 h-[calc(100%-73px)] overflow-y-auto">
             {visibleMenuItems.map((item) => {
               const Icon = item.icon;
-              const active = isActive(item.path);
+              const hasSubmenu = item.submenu && item.submenu.length > 0;
+              const isExpanded = expandedMenus.includes(item.label);
+
+              // Filtrar subitems visibles según permisos
+              const visibleSubitems = hasSubmenu
+                ? item.submenu.filter((subitem: any) =>
+                  !permisos || permisos[subitem.requiredPermission as keyof typeof permisos] === true
+                )
+                : [];
+
+              const active = hasSubmenu
+                ? isGroupActive(item.path)
+                : item.path === "/benefactores"
+                  ? isGroupActive(item.path)
+                  : isActive(item.path);
+
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                    ${active 
-                      ? 'bg-[#1b76b9] text-white' 
-                      : 'text-gray-700 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
+                <div key={item.path}>
+                  {hasSubmenu ? (
+                    <>
+                      {/* Item con submenú - solo toggle, no navegación */}
+                      <button
+                        onClick={() => toggleMenu(item.label)}
+                        className={`
+                          w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors
+                          ${active
+                            ? 'bg-[#1b76b9] text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                          }
+                        `}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="h-5 w-5" />
+                          <span className="font-medium">{item.label}</span>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
+
+                      {/* Submenú */}
+                      {isExpanded && (
+                        <div className="mt-1 ml-4 space-y-1">
+                          {visibleSubitems.map((subitem: any) => {
+                            const subActive = isActive(subitem.path);
+                            return (
+                              <Link
+                                key={subitem.path}
+                                to={subitem.path}
+                                onClick={() => setSidebarOpen(false)}
+                                className={`
+                                  flex items-center gap-3 px-4 py-2 rounded-lg transition-colors text-sm
+                                  ${subActive
+                                    ? 'bg-[#1b76b9] text-white'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                                  }
+                                `}
+                              >
+                                <span>{subitem.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // Item sin submenú - navegación normal
+                    <Link
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`
+                        flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                        ${active
+                          ? 'bg-[#1b76b9] text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                        }
+                      `}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -290,7 +455,7 @@ export default function Layout() {
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button 
+              <Button
                 type="button"
                 variant="outline"
                 onClick={() => setDialogPasswordOpen(false)}
@@ -299,8 +464,8 @@ export default function Layout() {
               >
                 Cancelar
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="bg-[#4064E3] hover:bg-[#3451C2] flex-1"
                 disabled={submitting}
               >

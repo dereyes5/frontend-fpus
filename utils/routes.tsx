@@ -1,10 +1,12 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import Login from "../components/Login";
 import Layout from "../components/Layout";
 import Dashboard from "../components/Dashboard";
 import Benefactores from "../components/Benefactores";
 import BenefactorDetail from "../components/BenefactorDetail";
 import Social from "../components/Social";
+import SocialSeguimiento from "../components/SocialSeguimiento";
+import SocialAprobaciones from "../components/SocialAprobaciones";
 import Cartera from "../components/Cartera";
 import Configuracion from "../components/Configuracion";
 import Aprobaciones from "../components/Aprobaciones";
@@ -13,35 +15,54 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 export const router = createBrowserRouter([
   {
     path: "/login",
-    Component: Login,
+    element: <Login />,
   },
   {
     path: "/",
     element: <ProtectedRoute><Layout /></ProtectedRoute>,
     children: [
-      { index: true, Component: Dashboard },
-      { 
-        path: "benefactores", 
+      {
+        index: true,
+        element: <Dashboard />
+      },
+      {
+        path: "benefactores",
         element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><Benefactores /></ProtectedRoute>
       },
-      { 
-        path: "benefactores/:id", 
+      {
+        path: "benefactores/:id",
         element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><BenefactorDetail /></ProtectedRoute>
       },
-      { 
-        path: "aprobaciones", 
+      {
+        path: "aprobaciones",
+        element: <Navigate to="/aprobaciones/benefactores" replace />
+      },
+      {
+        path: "aprobaciones/benefactores",
         element: <ProtectedRoute requiredPermissions={["aprobaciones"]}><Aprobaciones /></ProtectedRoute>
       },
-      { 
-        path: "cartera", 
+      {
+        path: "cartera",
         element: <ProtectedRoute requiredPermissions={["cartera_lectura"]}><Cartera /></ProtectedRoute>
       },
-      { 
-        path: "social", 
+      {
+        path: "social",
         element: <ProtectedRoute requiredPermissions={["social_lectura"]}><Social /></ProtectedRoute>
       },
-      { 
-        path: "configuracion", 
+      {
+        path: "social/seguimiento",
+        element: <ProtectedRoute requiredPermissions={["social_lectura"]}><SocialSeguimiento /></ProtectedRoute>
+      },
+      {
+        path: "aprobaciones/social",
+        element: <ProtectedRoute requiredPermissions={["aprobaciones_social"]}><SocialAprobaciones /></ProtectedRoute>
+      },
+      {
+        path: "social/aprobaciones",
+        element: <Navigate to="/aprobaciones/social" replace />
+      },
+      {
+        path: "configuracion",
         element: <ProtectedRoute requiredPermissions={["configuraciones"]}><Configuracion /></ProtectedRoute>
       },
     ],

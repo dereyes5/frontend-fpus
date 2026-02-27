@@ -83,4 +83,68 @@ export const cobrosService = {
     const response = await api.get<ApiResponse<SaldoBenefactor>>(`/cobros/benefactores/${id_benefactor}/saldo`);
     return response.data;
   },
+
+  // ========================================
+  // DÉBITOS MENSUALES
+  // ========================================
+
+  /**
+   * Importar archivo Excel de débitos mensuales
+   */
+  async importarExcelDebitos(archivo: File): Promise<ApiResponse<any>> {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+
+    const response = await api.post<ApiResponse<any>>('/cobros/debitos/importar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Obtener lista de lotes importados
+   */
+  async getLotesImportados(filtros?: {
+    mes?: number;
+    anio?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<ApiResponse<any[]>> {
+    const response = await api.get<ApiResponse<any[]>>('/cobros/debitos/lotes', {
+      params: filtros
+    });
+    return response.data;
+  },
+
+  /**
+   * Obtener detalle de un lote específico
+   */
+  async getDetalleLote(idLote: number): Promise<ApiResponse<any>> {
+    const response = await api.get<ApiResponse<any>>(`/cobros/debitos/lotes/${idLote}`);
+    return response.data;
+  },
+
+  /**
+   * Obtener estado actual de aportes mensuales (nuevo módulo)
+   */
+  async getEstadoAportesMensualesActual(): Promise<ApiResponse<any[]>> {
+    const response = await api.get<ApiResponse<any[]>>('/cobros/debitos/estado-actual');
+    return response.data;
+  },
+
+  /**
+   * Obtener historial completo de aportes mensuales
+   */
+  async getHistorialAportesMensuales(filtros?: {
+    mes?: number;
+    anio?: number;
+    idBenefactor?: number;
+  }): Promise<ApiResponse<any[]>> {
+    const response = await api.get<ApiResponse<any[]>>('/cobros/debitos/historial', {
+      params: filtros
+    });
+    return response.data;
+  },
 };

@@ -70,6 +70,12 @@ export const benefactoresService = {
     return response.data;
   },
 
+  // Obtener TODOS los titulares del sistema (para dropdown de dependientes)
+  async getTodosTitulares(): Promise<ApiResponse<Benefactor[]>> {
+    const response = await api.get<ApiResponse<Benefactor[]>>('/benefactores/titulares');
+    return response.data;
+  },
+
   // Subir contrato PDF
   async subirContrato(id: number, file: File): Promise<ApiResponse<{ filename: string; path: string }>> {
     const formData = new FormData();

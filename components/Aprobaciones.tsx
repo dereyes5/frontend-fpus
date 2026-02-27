@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle, XCircle, Clock, Eye, FileText, AlertCircle, MapPin, Mail, Phone, User } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Eye, FileText, AlertCircle, MapPin, Mail, Phone, User, Search, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Button } from "./ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -33,11 +35,26 @@ export default function Aprobaciones() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [tieneContratoPreview, setTieneContratoPreview] = useState(false);
 
+  // Filtros y ordenamiento
+  const [searchTerm, setSearchTerm] = useState("");
+  const [tipoFilter, setTipoFilter] = useState("todos");
+  const [sortField, setSortField] = useState<'n_convenio' | 'nombre_completo' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Paginación
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+
   const puedeAprobar = permisos?.aprobaciones ?? false;
 
   useEffect(() => {
     loadPendientes();
   }, []);
+
+  // Resetear paginación cuando cambian filtros
+  useEffect(() => {
+    setPageIndex(0);
+  }, [searchTerm, tipoFilter]);
 
   const loadPendientes = async () => {
     try {
@@ -179,6 +196,74 @@ export default function Aprobaciones() {
     return benefactoresService.getContratoUrl(previewBenefactor.id_benefactor);
   }, [previewBenefactor?.id_benefactor]);
 
+  // Ordenamiento
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIcon = (field: typeof sortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 inline" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1 inline" />
+      : <ArrowDown className="h-4 w-4 ml-1 inline" />;
+  };
+
+  // Filtrado y ordenamiento
+  const pendientesFiltrados = useMemo(() => {
+    let filtered = pendientes.filter((item) => {
+      const matchSearch = 
+        item.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.cedula || "").includes(searchTerm) ||
+        (item.n_convenio || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchTipo = tipoFilter === "todos" || item.tipo_benefactor === tipoFilter;
+
+      return matchSearch && matchTipo;
+    });
+
+    // Ordenar
+    if (sortField) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue = '';
+        let bValue = '';
+
+        if (sortField === 'n_convenio') {
+          aValue = (a.n_convenio || a.cedula || '').toLowerCase();
+          bValue = (b.n_convenio || b.cedula || '').toLowerCase();
+        } else if (sortField === 'nombre_completo') {
+          aValue = a.nombre_completo.toLowerCase();
+          bValue = b.nombre_completo.toLowerCase();
+        }
+
+        if (sortDirection === 'asc') {
+          return aValue.localeCompare(bValue);
+        } else {
+          return bValue.localeCompare(aValue);
+        }
+      });
+    }
+
+    return filtered;
+  }, [pendientes, searchTerm, tipoFilter, sortField, sortDirection]);
+
+  // Datos paginados
+  const paginatedData = useMemo(() => {
+    const startIndex = pageIndex * pageSize;
+    const endIndex = startIndex + pageSize;
+    return pendientesFiltrados.slice(startIndex, endIndex);
+  }, [pendientesFiltrados, pageIndex, pageSize]);
+
+  const totalPages = Math.ceil(pendientesFiltrados.length / pageSize);
+  const canPreviousPage = pageIndex > 0;
+  const canNextPage = pageIndex < totalPages - 1;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -193,12 +278,13 @@ export default function Aprobaciones() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-[#1D1D1D] mb-2">Aprobaciones</h1>
-          <p className="text-gray-600">Gestión de aprobación de registros pendientes</p>
-        </div>
-        {pendientes.length > 0 && puedeAprobar && (
+      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">Aprobaciones</h1>
+            <p className="text-white/90">Gestión de aprobación de registros pendientes</p>
+          </div>
+          {pendientes.length > 0 && puedeAprobar && (
           <div className="flex gap-2">
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleAprobarTodos} disabled={submitting}>
               <CheckCircle className="h-4 w-4 mr-2" />
@@ -209,7 +295,8 @@ export default function Aprobaciones() {
               Rechazar Todos
             </Button>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -229,8 +316,47 @@ export default function Aprobaciones() {
         </Card>
       </div>
 
+      {/* Filtros */}
+      {pendientes.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar por nombre, cédula o N° convenio..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={tipoFilter} onValueChange={setTipoFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filtrar por tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los tipos</SelectItem>
+                <SelectItem value="TITULAR">Titular</SelectItem>
+                <SelectItem value="DEPENDIENTE">Dependiente</SelectItem>
+              </SelectContent>
+            </Select>
+            {(searchTerm || tipoFilter !== "todos") && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  setSearchTerm("");
+                  setTipoFilter("todos");
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Lista */}
-      {pendientes.length === 0 ? (
+      {pendientesFiltrados.length === 0 && pendientes.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
@@ -238,47 +364,65 @@ export default function Aprobaciones() {
             <p className="text-gray-600">Todos los benefactores han sido revisados</p>
           </CardContent>
         </Card>
-      ) : (
+      ) : pendientesFiltrados.length === 0 ? (
         <Card>
-          <CardContent className="p-0">
-            {/* Vista desktop - Tabla */}
-            <div className="hidden md:block overflow-x-auto">
-              <Table>
+          <CardContent className="p-12 text-center">
+            <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">No se encontraron resultados</h3>
+            <p className="text-gray-600">Intenta ajustar los filtros de búsqueda</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
+          {/* Vista desktop - Tabla */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table className="table-fixed min-w-[1180px]">
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Benefactor</TableHead>
-                    <TableHead>Cédula</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Ciudad</TableHead>
-                    <TableHead>Fecha Registro</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                  <TableRow className="bg-gray-50">
+                    <TableHead 
+                      className="w-[12%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('n_convenio')}
+                    >
+                      <div className="flex items-center justify-center">
+                        N° Convenio
+                        {renderSortIcon('n_convenio')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="w-[18%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                      onClick={() => handleSort('nombre_completo')}
+                    >
+                      <div className="flex items-center justify-center">
+                        Benefactor
+                        {renderSortIcon('nombre_completo')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[12%] text-center">Cédula</TableHead>
+                    <TableHead className="w-[10%] text-center">Tipo</TableHead>
+                    <TableHead className="w-[12%] text-center">Ejecutivo</TableHead>
+                    <TableHead className="w-[12%] text-center">Fecha Registro</TableHead>
+                    <TableHead className="w-[24%] text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {pendientes.map((benefactor) => (
+                  {paginatedData.map((benefactor) => (
                     <TableRow key={benefactor.id_benefactor}>
-                      <TableCell className="font-medium">{benefactor.nombre_completo}</TableCell>
-                      <TableCell>{benefactor.cedula}</TableCell>
-                      <TableCell>
-                        <Badge variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
+                      <TableCell className="font-medium truncate text-center">{benefactor.n_convenio || "N/A"}</TableCell>
+                      <TableCell className="font-medium truncate text-center">{benefactor.nombre_completo}</TableCell>
+                      <TableCell className="truncate text-center">{benefactor.cedula}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="mx-auto" variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
                           {benefactor.tipo_benefactor}
                         </Badge>
                       </TableCell>
-                      <TableCell>{benefactor.ciudad}</TableCell>
-                      <TableCell>{benefactor.fecha_registro ? formatDate(benefactor.fecha_registro) : "N/A"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                          <Clock className="h-3 w-3 mr-1" />
-                          PENDIENTE
-                        </Badge>
-                      </TableCell>
+                      <TableCell className="truncate text-center">{benefactor.ejecutivo || "N/A"}</TableCell>
+                      <TableCell className="truncate text-center">{benefactor.fecha_suscripcion ? formatDate(benefactor.fecha_suscripcion) : "N/A"}</TableCell>
 
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end flex-wrap">
+                      <TableCell className="text-center">
+                        <div className="flex gap-2 justify-center flex-nowrap">
                           {/* ✅ Preview en Dialog (no redirección) */}
-                          <Button size="sm" variant="outline" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
+                          <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
                             <Eye className="h-4 w-4 mr-1" />
                             Ver detalles
                           </Button>
@@ -287,7 +431,7 @@ export default function Aprobaciones() {
                             <>
                               <Button
                                 size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white"
+                                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
                                 onClick={() => handleOpenDialog(benefactor, "APROBADO")}
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
@@ -295,7 +439,7 @@ export default function Aprobaciones() {
                               </Button>
                               <Button
                                 size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white"
+                                className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
                                 onClick={() => handleOpenDialog(benefactor, "RECHAZADO")}
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
@@ -314,8 +458,8 @@ export default function Aprobaciones() {
             </div>
 
             {/* Vista móvil - Cards */}
-            <div className="md:hidden p-4 space-y-4">
-              {pendientes.map((benefactor) => (
+            <div className="md:hidden p-6 space-y-4">
+              {paginatedData.map((benefactor) => (
                 <Card key={benefactor.id_benefactor} className="border-2 border-orange-200">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
@@ -331,20 +475,26 @@ export default function Aprobaciones() {
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
+                        <p className="text-xs text-gray-500">N° Convenio</p>
+                        <p className="font-medium">{benefactor.n_convenio || "N/A"}</p>
+                      </div>
+                      <div>
                         <p className="text-xs text-gray-500">Tipo</p>
                         <Badge variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
                           {benefactor.tipo_benefactor}
                         </Badge>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Ciudad</p>
-                        <p className="font-medium">{benefactor.ciudad}</p>
-                      </div>
                     </div>
 
-                    <div>
-                      <p className="text-xs text-gray-500">Fecha Registro</p>
-                      <p className="text-sm">{benefactor.fecha_registro ? formatDate(benefactor.fecha_registro) : "N/A"}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-500">Ejecutivo</p>
+                        <p className="font-medium">{benefactor.ejecutivo || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Fecha Registro</p>
+                        <p className="text-sm">{benefactor.fecha_suscripcion ? formatDate(benefactor.fecha_suscripcion) : "N/A"}</p>
+                      </div>
                     </div>
 
                     <Separator />
@@ -387,8 +537,72 @@ export default function Aprobaciones() {
                 </Card>
               ))}
             </div>
-          </CardContent>
-        </Card>
+
+          {/* Paginación */}
+          {pendientesFiltrados.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+              <div className="text-sm text-gray-600">
+                Mostrando {pageIndex * pageSize + 1} a{" "}
+                {Math.min((pageIndex + 1) * pageSize, pendientesFiltrados.length)} de {pendientesFiltrados.length} registros
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPageIndex(0)}
+                  disabled={!canPreviousPage}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPageIndex(pageIndex - 1)}
+                  disabled={!canPreviousPage}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Página {pageIndex + 1} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPageIndex(pageIndex + 1)}
+                  disabled={!canNextPage}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPageIndex(totalPages - 1)}
+                  disabled={!canNextPage}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPageIndex(0);
+                }}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 30, 50].map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size} por página
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Dialog aprobar/rechazar */}
@@ -414,7 +628,7 @@ export default function Aprobaciones() {
               <Textarea
                 id="comentario"
                 value={comentario}
-                onChange={(e) => setComentario(e.target.value)}
+                onChange={(e) => setComentario(e.target.value.toUpperCase())}
                 placeholder="Ingrese un comentario sobre la decisión..."
                 rows={4}
               />
@@ -568,7 +782,7 @@ export default function Aprobaciones() {
                     <div>
                       <p className="text-sm text-gray-600">Fecha registro</p>
                       <p className="font-medium">
-                        {previewBenefactor.fecha_registro ? formatDate(previewBenefactor.fecha_registro) : "-"}
+                        {previewBenefactor.fecha_suscripcion ? formatDate(previewBenefactor.fecha_suscripcion) : "-"}
                       </p>
                     </div>
 

@@ -1,14 +1,16 @@
 import { useParams, useNavigate } from "react-router";
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, Edit, Trash2, Mail, Phone, MapPin, Users, DollarSign, FileText, AlertCircle, TrendingUp, Upload, Download, X } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Mail, Phone, MapPin, Users, DollarSign, FileText, AlertCircle, TrendingUp, Upload, Download, X, UserCheck } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Textarea } from "./ui/textarea";
 import { benefactoresService } from "../services/benefactores.service";
 import { cobrosService } from "../services/cobros.service";
 import { useAuth } from "../contexts/AuthContext";
@@ -24,11 +26,25 @@ export default function BenefactorDetail() {
   const [historialPagos, setHistorialPagos] = useState<HistorialPago[]>([]);
   const [saldo, setSaldo] = useState<SaldoBenefactor | null>(null);
   const [dependientes, setDependientes] = useState<Benefactor[]>([]);
+  const [titular, setTitular] = useState<Benefactor | null>(null);
   const [loading, setLoading] = useState(true);
   const [tieneContrato, setTieneContrato] = useState(false);
   const [subiendoContrato, setSubiendoContrato] = useState(false);
   const [dialogContratoOpen, setDialogContratoOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para edición
+  const [dialogEditarOpen, setDialogEditarOpen] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [formEdit, setFormEdit] = useState({
+    nombre_completo: "",
+    telefono: "",
+    email: "",
+    direccion: "",
+    nacionalidad: "",
+    estado_civil: "",
+    observacion: "",
+  });
 
   useEffect(() => {
     if (id) {
@@ -40,8 +56,20 @@ export default function BenefactorDetail() {
   }, [id]);
 
   useEffect(() => {
+    console.log('🔍 Benefactor cargado:', {
+      tipo: benefactor?.tipo_benefactor,
+      id_titular: benefactor?.id_titular,
+      nombre: benefactor?.nombre_completo
+    });
+
     if (benefactor?.tipo_benefactor === 'TITULAR') {
+      console.log('✅ Es TITULAR - cargando dependientes...');
       loadDependientes();
+    } else if (benefactor?.tipo_benefactor === 'DEPENDIENTE' && benefactor?.id_titular) {
+      console.log('✅ Es DEPENDIENTE - cargando titular con id:', benefactor.id_titular);
+      loadTitular(benefactor.id_titular);
+    } else {
+      console.log('⚠️ No se cumple ninguna condición');
     }
   }, [benefactor]);
 
@@ -49,6 +77,14 @@ export default function BenefactorDetail() {
     try {
       setLoading(true);
       const response = await benefactoresService.getBenefactorById(Number(id));
+      console.log('🏦 Benefactor completo desde API:', response.data);
+      console.log('🔑 Campos financieros:', {
+        tipo_afiliacion: response.data.tipo_afiliacion,
+        cuenta: response.data.cuenta,
+        banco_emisor: response.data.banco_emisor,
+        num_cuenta_tc: response.data.num_cuenta_tc,
+        tipo_cuenta: response.data.tipo_cuenta,
+      });
       setBenefactor(response.data);
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Error al cargar benefactor");
@@ -79,6 +115,17 @@ export default function BenefactorDetail() {
       const response = await benefactoresService.getDependientes(Number(id));
       setDependientes(response.data);
     } catch (error) {
+    }
+  };
+
+  const loadTitular = async (idTitular: number) => {
+    try {
+      console.log('📡 Cargando titular con ID:', idTitular);
+      const response = await benefactoresService.getBenefactorById(idTitular);
+      console.log('✅ Titular cargado:', response.data);
+      setTitular(response.data);
+    } catch (error) {
+      console.error('❌ Error al cargar titular:', error);
     }
   };
 
@@ -180,12 +227,43 @@ export default function BenefactorDetail() {
     }
   };
 
+  const handleAbrirEdicion = () => {
+    if (benefactor) {
+      setFormEdit({
+        nombre_completo: benefactor.nombre_completo || "",
+        telefono: benefactor.telefono || "",
+        email: benefactor.email || "",
+        direccion: benefactor.direccion || "",
+        nacionalidad: benefactor.nacionalidad || "",
+        estado_civil: benefactor.estado_civil || "",
+        observacion: benefactor.observacion || "",
+      });
+      setDialogEditarOpen(true);
+    }
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!id) return;
+
+    try {
+      setEditando(true);
+      await benefactoresService.updateBenefactor(Number(id), formEdit);
+      toast.success("Benefactor actualizado exitosamente");
+      setDialogEditarOpen(false);
+      await loadBenefactor(); // Recargar datos
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar benefactor");
+    } finally {
+      setEditando(false);
+    }
+  };
+
   return (
     <div className="space-y-6 w-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="sm"
           onClick={() => navigate("/benefactores")}
         >
@@ -196,18 +274,28 @@ export default function BenefactorDetail() {
 
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[#1D1D1D] mb-2 break-words">{benefactor.nombre_completo}</h1>
+          <h1 className="text-[#1D1D1D] mb-2 break-words">
+            {benefactor.nombre_completo}
+          </h1>
+          {benefactor.tipo_benefactor === 'DEPENDIENTE' && titular && (
+            <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
+              <UserCheck className="h-4 w-4 text-blue-500" />
+              <span>Dependiente de:</span>
+              <span className="font-medium text-[#4064E3]">{titular.nombre_completo}</span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
-            <Badge 
+            <Badge
               className={
                 benefactor.estado === "ACTIVO"
-                  ? "bg-[#0F8F5B] hover:bg-[#0D7A4C]"
-                  : "bg-gray-400 hover:bg-gray-500"
+                  ? "bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white"
+                  : "bg-gray-400 hover:bg-gray-500 text-white"
               }
             >
               {benefactor.estado}
             </Badge>
-            <Badge 
+            <Badge
               variant="outline"
               className="border-[#4064E3] text-[#4064E3]"
             >
@@ -219,17 +307,18 @@ export default function BenefactorDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!puedeEditar && (
+          {puedeEditar && (
             <>
-              <Button 
+              <Button
                 variant="outline"
                 size="sm"
                 className="text-[#4064E3] hover:text-[#3451B8] hover:bg-blue-50 border-[#4064E3]"
+                onClick={handleAbrirEdicion}
               >
                 <Edit className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Editar</span>
               </Button>
-              <Button 
+              <Button
                 variant="outline"
                 size="sm"
                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -258,19 +347,21 @@ export default function BenefactorDetail() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-gray-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Dependientes</p>
-                <p className="text-3xl text-[#1D1D1D]">{dependientes.length}</p>
+        {benefactor.tipo_benefactor === 'TITULAR' && (
+          <Card className="border-gray-200">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Dependientes</p>
+                  <p className="text-3xl text-[#1D1D1D]">{dependientes.length}</p>
+                </div>
+                <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
-                <Users className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
         <Card className="border-gray-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -297,6 +388,17 @@ export default function BenefactorDetail() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Cédula de Identidad</p>
               <p className="text-[#1D1D1D]">{benefactor.cedula}</p>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Nacionalidad</p>
+                <p className="text-[#1D1D1D]">{benefactor.nacionalidad || 'No especificado'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Estado Civil</p>
+                <p className="text-[#1D1D1D]">{benefactor.estado_civil || 'No especificado'}</p>
+              </div>
             </div>
             <Separator />
             <div className="flex items-center gap-3">
@@ -345,8 +447,8 @@ export default function BenefactorDetail() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Fecha de Nacimiento</p>
               <p className="text-[#1D1D1D]">
-                {benefactor.fecha_nacimiento 
-                  ? new Date(benefactor.fecha_nacimiento).toLocaleDateString('es-EC') 
+                {benefactor.fecha_nacimiento
+                  ? new Date(benefactor.fecha_nacimiento).toLocaleDateString('es-EC')
                   : 'No disponible'}
               </p>
             </div>
@@ -354,7 +456,7 @@ export default function BenefactorDetail() {
             <div>
               <p className="text-sm text-gray-600 mb-1">Fecha de Suscripción</p>
               <p className="text-[#1D1D1D]">
-                {benefactor.fecha_suscripcion 
+                {benefactor.fecha_suscripcion
                   ? new Date(benefactor.fecha_suscripcion).toLocaleDateString('es-EC')
                   : 'No disponible'}
               </p>
@@ -364,6 +466,36 @@ export default function BenefactorDetail() {
               <p className="text-sm text-gray-600 mb-1">Tipo de Afiliación</p>
               <p className="text-[#1D1D1D]">{benefactor.tipo_afiliacion || 'No especificado'}</p>
             </div>
+            {(benefactor.cuenta || benefactor.banco_emisor) && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Cuenta Bancaria</p>
+                  <p className="text-[#1D1D1D] font-mono">
+                    {benefactor.cuenta ? maskAccountNumber(benefactor.cuenta) : 'No especificado'}
+                  </p>
+                  {benefactor.banco_emisor && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {benefactor.banco_emisor}
+                    </p>
+                  )}
+                </div>
+                {benefactor.num_cuenta_tc && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Tarjeta de Crédito</p>
+                      <p className="text-[#1D1D1D] font-mono">{maskAccountNumber(benefactor.num_cuenta_tc)}</p>
+                      {benefactor.tipo_cuenta && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {benefactor.tipo_cuenta}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
             <Separator />
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -376,6 +508,15 @@ export default function BenefactorDetail() {
               </div>
             </div>
             <Separator />
+            {benefactor.observacion && (
+              <>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Observación</p>
+                  <p className="text-[#1D1D1D] text-sm">{benefactor.observacion}</p>
+                </div>
+                <Separator />
+              </>
+            )}
             <div>
               <p className="text-sm text-gray-600 mb-2">Contrato</p>
               {tieneContrato ? (
@@ -406,18 +547,18 @@ export default function BenefactorDetail() {
                 title="Contrato PDF"
               />
             </div>
-            
+
             {/* Botones de acción */}
             <div className="flex gap-2 flex-wrap">
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 variant="outline"
                 onClick={handleDescargarContrato}
               >
                 <Download className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Descargar</span>
               </Button>
-              {!puedeEditar && (
+              {puedeEditar && (
                 <>
                   <Dialog open={dialogContratoOpen} onOpenChange={setDialogContratoOpen}>
                     <DialogTrigger asChild>
@@ -448,8 +589,8 @@ export default function BenefactorDetail() {
                       </div>
                     </DialogContent>
                   </Dialog>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={handleEliminarContrato}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -479,7 +620,7 @@ export default function BenefactorDetail() {
                 </p>
               </div>
               <Dialog open={dialogContratoOpen} onOpenChange={setDialogContratoOpen}>
-                {!puedeEditar && (
+                {puedeEditar && (
                   <DialogTrigger asChild>
                     <Button>
                       <Upload className="h-4 w-4 mr-2" />
@@ -508,7 +649,7 @@ export default function BenefactorDetail() {
                   </div>
                 </DialogContent>
               </Dialog>
-              {puedeEditar && (
+              {!puedeEditar && (
                 <p className="text-sm text-gray-600">
                   Modo administrador: solo lectura (no puedes subir/cambiar contratos)
                 </p>
@@ -551,12 +692,12 @@ export default function BenefactorDetail() {
                       <TableCell className="font-medium">{dep.nombre_completo}</TableCell>
                       <TableCell className="font-mono text-sm">{dep.cedula}</TableCell>
                       <TableCell className="text-sm">
-                        {dep.fecha_nacimiento 
+                        {dep.fecha_nacimiento
                           ? new Date(dep.fecha_nacimiento).toLocaleDateString('es-EC', {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit'
-                            })
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                          })
                           : '-'
                         }
                       </TableCell>
@@ -564,17 +705,17 @@ export default function BenefactorDetail() {
                       <TableCell>{dep.telefono || '-'}</TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {dep.num_cuenta_tc ? (
+                          {dep.cuenta ? (
                             <>
-                              <div className="font-mono">{maskAccountNumber(dep.num_cuenta_tc)}</div>
-                              <div className="text-gray-500 text-xs">{dep.tipo_cuenta} - {dep.banco_emisor}</div>
+                              <div className="font-mono">{maskAccountNumber(dep.cuenta)}</div>
+                              {dep.banco_emisor && <div className="text-gray-500 text-xs">{dep.banco_emisor}</div>}
                             </>
                           ) : '-'}
                         </div>
                       </TableCell>
                       <TableCell className="font-semibold">${Number(dep.aporte || 0).toFixed(2)}</TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
                           className={
                             dep.estado === "ACTIVO"
                               ? "bg-green-500 hover:bg-green-600 text-white"
@@ -600,7 +741,7 @@ export default function BenefactorDetail() {
                         <p className="font-semibold text-lg break-words">{dep.nombre_completo}</p>
                         <p className="text-sm text-gray-600 font-mono break-all">{dep.n_convenio || dep.cedula}</p>
                       </div>
-                      <Badge 
+                      <Badge
                         className={
                           dep.estado === "ACTIVO"
                             ? "bg-green-500 hover:bg-green-600 text-white"
@@ -643,11 +784,11 @@ export default function BenefactorDetail() {
                       </div>
                     )}
 
-                    {dep.num_cuenta_tc && (
+                    {dep.cuenta && (
                       <div className="pt-2 border-t min-w-0">
-                        <p className="text-xs text-gray-500">Cuenta</p>
-                        <p className="text-sm font-mono break-all">{maskAccountNumber(dep.num_cuenta_tc)}</p>
-                        <p className="text-xs text-gray-500 break-words">{dep.tipo_cuenta} - {dep.banco_emisor}</p>
+                        <p className="text-xs text-gray-500">Cuenta Bancaria</p>
+                        <p className="text-sm font-mono break-all">{maskAccountNumber(dep.cuenta)}</p>
+                        {dep.banco_emisor && <p className="text-xs text-gray-500 break-words">{dep.banco_emisor}</p>}
                       </div>
                     )}
                   </CardContent>
@@ -691,9 +832,9 @@ export default function BenefactorDetail() {
                         ${pago.monto_aportado}
                       </TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
                           className={
-                            pago.estado_aporte === "APORTADO" 
+                            pago.estado_aporte === "APORTADO"
                               ? "bg-green-100 text-green-800 border-green-200"
                               : "bg-red-100 text-red-800 border-red-200"
                           }
@@ -702,7 +843,7 @@ export default function BenefactorDetail() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {pago.ultima_fecha_aporte 
+                        {pago.ultima_fecha_aporte
                           ? new Date(pago.ultima_fecha_aporte).toLocaleDateString('es-EC')
                           : 'N/A'
                         }
@@ -722,9 +863,9 @@ export default function BenefactorDetail() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-lg break-words">{pago.mes} {pago.anio}</p>
                       </div>
-                      <Badge 
+                      <Badge
                         className={
-                          pago.estado_aporte === "APORTADO" 
+                          pago.estado_aporte === "APORTADO"
                             ? "bg-green-100 text-green-800 border-green-200"
                             : "bg-red-100 text-red-800 border-red-200"
                         }
@@ -747,7 +888,7 @@ export default function BenefactorDetail() {
                     <div className="pt-2 border-t min-w-0">
                       <p className="text-xs text-gray-500">Última Fecha Aporte</p>
                       <p className="text-sm font-medium break-words">
-                        {pago.ultima_fecha_aporte 
+                        {pago.ultima_fecha_aporte
                           ? new Date(pago.ultima_fecha_aporte).toLocaleDateString('es-EC')
                           : 'N/A'
                         }
@@ -761,6 +902,128 @@ export default function BenefactorDetail() {
         </Card>
       )}
 
+
+      {/* Modal de Edición */}
+      <Dialog open={dialogEditarOpen} onOpenChange={setDialogEditarOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Benefactor</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-nombre">Nombre Completo</Label>
+              <Input
+                id="edit-nombre"
+                value={formEdit.nombre_completo}
+                onChange={(e) => setFormEdit({ ...formEdit, nombre_completo: e.target.value.toUpperCase() })}
+                disabled={editando}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-telefono">Teléfono</Label>
+                <Input
+                  id="edit-telefono"
+                  value={formEdit.telefono}
+                  onChange={(e) => setFormEdit({ ...formEdit, telefono: e.target.value.replace(/\D/g, "") })}
+                  maxLength={10}
+                  disabled={editando}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={formEdit.email}
+                  onChange={(e) => setFormEdit({ ...formEdit, email: e.target.value })}
+                  disabled={editando}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-direccion">Dirección</Label>
+              <Input
+                id="edit-direccion"
+                value={formEdit.direccion}
+                onChange={(e) => setFormEdit({ ...formEdit, direccion: e.target.value.toUpperCase() })}
+                disabled={editando}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-nacionalidad">Nacionalidad</Label>
+                <Select
+                  value={formEdit.nacionalidad}
+                  onValueChange={(value) => setFormEdit({ ...formEdit, nacionalidad: value })}
+                  disabled={editando}
+                >
+                  <SelectTrigger id="edit-nacionalidad">
+                    <SelectValue placeholder="Seleccione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ECUATORIANA">Ecuatoriana</SelectItem>
+                    <SelectItem value="COLOMBIANA">Colombiana</SelectItem>
+                    <SelectItem value="VENEZOLANA">Venezolana</SelectItem>
+                    <SelectItem value="PERUANA">Peruana</SelectItem>
+                    <SelectItem value="OTRA">Otra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-estado-civil">Estado Civil</Label>
+                <Select
+                  value={formEdit.estado_civil}
+                  onValueChange={(value) => setFormEdit({ ...formEdit, estado_civil: value })}
+                  disabled={editando}
+                >
+                  <SelectTrigger id="edit-estado-civil">
+                    <SelectValue placeholder="Seleccione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SOLTERO/A">Soltero/a</SelectItem>
+                    <SelectItem value="CASADO/A">Casado/a</SelectItem>
+                    <SelectItem value="DIVORCIADO/A">Divorciado/a</SelectItem>
+                    <SelectItem value="VIUDO/A">Viudo/a</SelectItem>
+                    <SelectItem value="UNION LIBRE">Unión Libre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-observacion">Observación</Label>
+              <Textarea
+                id="edit-observacion"
+                value={formEdit.observacion}
+                onChange={(e) => setFormEdit({ ...formEdit, observacion: e.target.value.toUpperCase() })}
+                rows={3}
+                disabled={editando}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogEditarOpen(false)}
+              disabled={editando}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleGuardarEdicion}
+              disabled={editando}
+            >
+              {editando ? "Guardando..." : "Guardar Cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

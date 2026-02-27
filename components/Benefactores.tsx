@@ -8,13 +8,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Badge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
 import { Label } from "./ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Textarea } from "./ui/textarea";
 import { Card, CardContent } from "./ui/card";
 import { Alert, AlertDescription } from "./ui/alert";
 import { benefactoresService } from "../services/benefactores.service";
+import { bancosService } from "../services/bancos.service";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import type { Benefactor } from "../types";
+import type { Banco } from "../services/bancos.service";
 import {
   useReactTable,
   getCoreRowModel,
@@ -120,8 +122,8 @@ export default function Benefactores() {
 
   // ✅ lista independiente SOLO de TITULARES (sin filtro por ejecutivo)
   const [titularesDB, setTitularesDB] = useState<Benefactor[]>([]);
+  const [bancos, setBancos] = useState<Banco[]>([]);
 
-  const [convenio, setConvenio] = useState("");
   const [convenioSugerido, setConvenioSugerido] = useState<string>("");
 
   const [nombreCompleto, setNombreCompleto] = useState("");
@@ -137,17 +139,27 @@ export default function Benefactores() {
   const [inscripcion, setInscripcion] = useState("0.00");
   const [aporte, setAporte] = useState("0.00");
 
+  // Campos adicionales
+  const [nacionalidad, setNacionalidad] = useState("");
+  const [estadoCivil, setEstadoCivil] = useState("");
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
+  const [fechaSuscripcion, setFechaSuscripcion] = useState("");
+  const [numCuentaTc, setNumCuentaTc] = useState("");
+  const [tipoCuenta, setTipoCuenta] = useState("");
+  const [bancoEmisor, setBancoEmisor] = useState("");
+  const [observacion, setObservacion] = useState("");
+
   const [guardando, setGuardando] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Estados para filtros
   const [estadoFilter, setEstadoFilter] = useState("todos");
   const [ciudadFilter, setCiudadFilter] = useState("todos");
+  const [tipoFilter, setTipoFilter] = useState("todos");
   const [globalFilter, setGlobalFilter] = useState("");
   
-  // Estados para react-table - Separados para cada tabla para evitar crashes
-  const [sortingTitulares, setSortingTitulares] = useState<SortingState>([]);
-  const [sortingDependientes, setSortingDependientes] = useState<SortingState>([]);
+  // Estado para react-table (una sola tabla ahora)
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [tipoAfiliacion, setTipoAfiliacion] = useState("individual");
@@ -237,19 +249,23 @@ export default function Benefactores() {
   const loadBenefactores = async () => {
     try {
       setLoading(true);
+      
+      // Cargar benefactores (filtrados según permisos del usuario)
       const response = await benefactoresService.getBenefactores();
       const data: Benefactor[] = response.data;
 
       setConvenioSugerido(sugerirSiguienteConvenio(data));
-
-      // ✅ TODOS los TITULARES para el selector del dependiente
-      const todosTitulares = data.filter((b) => b.tipo_benefactor === "TITULAR");
-      setTitularesDB(todosTitulares);
-
-      // El backend ya filtra según permisos:
-      // - Solo lectura: ve TODOS los benefactores
-      // - Lectura + escritura: ve solo los benefactores creados por él
       setBenefactores(data);
+
+      // ✅ Cargar TODOS los TITULARES del sistema (para dropdown de dependientes)
+      // Este endpoint devuelve todos los titulares sin importar el usuario
+      const titularesResponse = await benefactoresService.getTodosTitulares();
+      setTitularesDB(titularesResponse.data);
+
+      // Cargar bancos
+      const bancosResponse = await bancosService.getAll();
+      setBancos(bancosResponse.data.data || []);
+      
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Error al cargar benefactores");
     } finally {
@@ -270,11 +286,18 @@ export default function Benefactores() {
     setMesProduccion("");
     setInscripcion("0.00");
     setAporte("0.00");
+    setNacionalidad("");
+    setEstadoCivil("");
+    setFechaNacimiento("");
+    setFechaSuscripcion("");
+    setNumCuentaTc("");
+    setTipoCuenta("");
+    setBancoEmisor("");
+    setObservacion("");
     setTipoBenefactor("TITULAR");
     setTipoAfiliacion("individual");
     setTitularSeleccionado("");
     setSearchTitular("");
-    setConvenio("");
     limpiarContrato();
   };
 
@@ -325,17 +348,25 @@ export default function Benefactores() {
         tipo_benefactor: tipoBenefactor,
         nombre_completo: nombreCompleto.trim(),
         cedula: ced,
+        nacionalidad: nacionalidad || undefined,
+        estado_civil: estadoCivil || undefined,
+        fecha_nacimiento: fechaNacimiento || undefined,
+        fecha_suscripcion: fechaSuscripcion || undefined,
         email: email.trim() || undefined,
         telefono: telefono.trim() || undefined,
         direccion: direccion.trim(),
         ciudad,
         provincia,
-        n_convenio: convenio.trim() || undefined,
+        n_convenio: convenioSugerido || undefined,
         mes_prod: mesProduccion || undefined,
         tipo_afiliacion: tipoAfiliacion,
         cuenta: tipoAfiliacion === "individual" ? (cuentaBancaria.trim() || undefined) : undefined,
+        num_cuenta_tc: tipoAfiliacion === "individual" ? (numCuentaTc.trim() || undefined) : undefined,
+        tipo_cuenta: tipoAfiliacion === "individual" ? (tipoCuenta || undefined) : undefined,
+        banco_emisor: tipoAfiliacion === "individual" ? (bancoEmisor.trim() || undefined) : undefined,
         inscripcion: Number(inscripcion || 0),
         aporte: Number(aporte || 0),
+        observacion: observacion.trim() || undefined,
         estado: "ACTIVO",
       };
 
@@ -373,19 +404,11 @@ export default function Benefactores() {
     }
   };
 
-  // Memoizar listas visibles para evitar recálculos innecesarios
-  const titularesVisiblesEnTabla = useMemo(
-    () => benefactores.filter((b) => b.tipo_benefactor === "TITULAR"),
-    [benefactores]
-  );
-  
-  const dependientesVisiblesEnTabla = useMemo(
-    () => benefactores.filter((b) => b.tipo_benefactor === "DEPENDIENTE"),
-    [benefactores]
-  );
+  // Lista base de benefactores (sin filtrar por tipo aún)
+  const benefactoresBase = useMemo(() => benefactores, [benefactores]);
 
-  // Definición de columnas para titulares
-  const columnasTitulares: ColumnDef<Benefactor>[] = useMemo(
+  // Definición de columnas unificada
+  const columnasBenefactores: ColumnDef<Benefactor>[] = useMemo(
     () => [
       {
         accessorKey: "n_convenio",
@@ -396,8 +419,14 @@ export default function Benefactores() {
         enableSorting: true,
       },
       {
+        accessorKey: "cedula",
+        header: "Cédula",
+        cell: ({ row }) => <span className="font-mono text-sm">{row.original.cedula}</span>,
+        enableSorting: true,
+      },
+      {
         accessorKey: "nombre_completo",
-        header: "Nombre Completo",
+        header: "Benefactor",
         cell: ({ row }) => <span className="font-medium">{row.original.nombre_completo}</span>,
         enableSorting: true,
       },
@@ -405,16 +434,10 @@ export default function Benefactores() {
         accessorKey: "tipo_benefactor",
         header: "Tipo",
         cell: ({ row }) => (
-          <Badge variant="outline" className="border-blue-500 text-blue-700">
+          <Badge variant={row.original.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
             {row.original.tipo_benefactor}
           </Badge>
         ),
-        enableSorting: false,
-      },
-      {
-        accessorKey: "ciudad",
-        header: "Ciudad",
-        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.ciudad}</span>,
         enableSorting: true,
       },
       {
@@ -434,79 +457,16 @@ export default function Benefactores() {
         enableSorting: true,
       },
       {
-        id: "acciones",
-        header: () => <div className="text-right">Acciones</div>,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <Link to={`/benefactores/${row.original.id_benefactor}`}>
-              <Button variant="ghost" size="sm">
-                <Eye className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Ver detalles</span>
-                <span className="sm:hidden">Ver</span>
-              </Button>
-            </Link>
-          </div>
-        ),
-        enableSorting: false,
-      },
-    ],
-    []
-  );
-
-  // Definición de columnas para dependientes
-  const columnasDependientes: ColumnDef<Benefactor>[] = useMemo(
-    () => [
-      {
-        accessorKey: "n_convenio",
-        header: "N° Convenio",
-        cell: ({ row }) => (
-          <span className="font-mono text-sm">{row.original.n_convenio || row.original.cedula}</span>
-        ),
-        enableSorting: true,
-      },
-      {
-        accessorKey: "nombre_completo",
-        header: "Nombre Completo",
-        cell: ({ row }) => <span className="font-medium">{row.original.nombre_completo}</span>,
-        enableSorting: true,
-      },
-      {
-        accessorKey: "tipo_benefactor",
-        header: "Tipo",
-        cell: ({ row }) => (
-          <Badge variant="outline" className="border-purple-500 text-purple-700">
-            {row.original.tipo_benefactor}
-          </Badge>
-        ),
-        enableSorting: false,
-      },
-      {
         accessorKey: "ciudad",
         header: "Ciudad",
         cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.ciudad}</span>,
         enableSorting: true,
       },
       {
-        accessorKey: "estado",
-        header: "Estado",
-        cell: ({ row }) => (
-          <Badge
-            className={
-              row.original.estado === "ACTIVO"
-                ? "bg-green-500 hover:bg-green-600 text-white"
-                : "bg-gray-400 hover:bg-gray-500 text-white"
-            }
-          >
-            {row.original.estado}
-          </Badge>
-        ),
-        enableSorting: true,
-      },
-      {
         id: "acciones",
-        header: () => <div className="text-right">Acciones</div>,
+        header: () => <div className="text-center">Acciones</div>,
         cell: ({ row }) => (
-          <div className="text-right">
+          <div className="text-center">
             <Link to={`/benefactores/${row.original.id_benefactor}`}>
               <Button variant="ghost" size="sm">
                 <Eye className="h-4 w-4 mr-2" />
@@ -522,64 +482,45 @@ export default function Benefactores() {
     []
   );
 
-  // Datos filtrados para titulares
-  const datosTitularesFiltrados = useMemo(() => {
-    return titularesVisiblesEnTabla.filter((benefactor) => {
-      const matchesSearch =
+  // Aplicar filtros unificados
+  const benefactoresFiltrados = useMemo(() => {
+    return benefactoresBase.filter((benefactor) => {
+      const matchesSearch = 
         benefactor.nombre_completo.toLowerCase().includes(globalFilter.toLowerCase()) ||
         (benefactor.cedula || "").includes(globalFilter) ||
         (benefactor.n_convenio || "").toLowerCase().includes(globalFilter.toLowerCase());
 
       const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
-      const matchesCiudad = ciudadFilter === "todos" || benefactor.ciudad === ciudadFilter;
+      const matchesCiudad = 
+        ciudadFilter === "todos" || 
+        (benefactor.ciudad || "").toLowerCase() === ciudadFilter.toLowerCase();
+      const matchesTipo = tipoFilter === "todos" || benefactor.tipo_benefactor === tipoFilter;
 
-      return matchesSearch && matchesEstado && matchesCiudad;
+      return matchesSearch && matchesEstado && matchesCiudad && matchesTipo;
     });
-  }, [titularesVisiblesEnTabla, globalFilter, estadoFilter, ciudadFilter]);
+  }, [benefactoresBase, globalFilter, estadoFilter, ciudadFilter, tipoFilter]);
 
-  // Datos filtrados para dependientes
-  const datosDependientesFiltrados = useMemo(() => {
-    return dependientesVisiblesEnTabla.filter((benefactor) => {
-      const matchesSearch =
-        benefactor.nombre_completo.toLowerCase().includes(globalFilter.toLowerCase()) ||
-        (benefactor.cedula || "").includes(globalFilter) ||
-        (benefactor.n_convenio || "").toLowerCase().includes(globalFilter.toLowerCase());
-
-      const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
-      const matchesCiudad = ciudadFilter === "todos" || benefactor.ciudad === ciudadFilter;
-
-      return matchesSearch && matchesEstado && matchesCiudad;
+  // Obtener ciudades únicas de los benefactores cargados
+  const ciudadesUnicas = useMemo(() => {
+    const ciudades = new Set<string>();
+    benefactoresBase.forEach((b) => {
+      if (b.ciudad && b.ciudad.trim()) {
+        ciudades.add(b.ciudad);
+      }
     });
-  }, [dependientesVisiblesEnTabla, globalFilter, estadoFilter, ciudadFilter]);
+    return Array.from(ciudades).sort();
+  }, [benefactoresBase]);
 
-  // Tabla para titulares
-  const tablaTitulares = useReactTable({
-    data: datosTitularesFiltrados,
-    columns: columnasTitulares,
+  // Tabla unificada
+  const tablaBenefactores = useReactTable({
+    data: benefactoresFiltrados,
+    columns: columnasBenefactores,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSortingTitulares,
+    onSortingChange: setSorting,
     state: {
-      sorting: sortingTitulares,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
-  });
-
-  // Tabla para dependientes
-  const tablaDependientes = useReactTable({
-    data: datosDependientesFiltrados,
-    columns: columnasDependientes,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSortingDependientes,
-    state: {
-      sorting: sortingDependientes,
+      sorting: sorting,
     },
     initialState: {
       pagination: {
@@ -626,9 +567,7 @@ export default function Benefactores() {
             onOpenChange={(open) => {
               setIsDialogOpen(open);
 
-              if (open) {
-                if (!convenio.trim() && convenioSugerido) setConvenio(convenioSugerido);
-              } else {
+              if (!open) {
                 resetFormulario();
               }
             }}
@@ -653,7 +592,7 @@ export default function Benefactores() {
                       id="nombre"
                       placeholder="Ingrese nombre completo"
                       value={nombreCompleto}
-                      onChange={(e) => setNombreCompleto(e.target.value)}
+                      onChange={(e) => setNombreCompleto(e.target.value.toUpperCase())}
                       disabled={guardando || subiendoContrato}
                     />
                   </div>
@@ -708,6 +647,50 @@ export default function Benefactores() {
                   </div>
                 </div>
 
+                {/* Campos adicionales: Nacionalidad, Estado Civil, Fecha Nacimiento */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nacionalidad">Nacionalidad</Label>
+                    <Select value={nacionalidad} onValueChange={setNacionalidad} disabled={guardando || subiendoContrato}>
+                      <SelectTrigger id="nacionalidad">
+                        <SelectValue placeholder="Seleccione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ECUATORIANA">Ecuatoriana</SelectItem>
+                        <SelectItem value="COLOMBIANA">Colombiana</SelectItem>
+                        <SelectItem value="VENEZOLANA">Venezolana</SelectItem>
+                        <SelectItem value="PERUANA">Peruana</SelectItem>
+                        <SelectItem value="OTRA">Otra</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estadoCivil">Estado Civil</Label>
+                    <Select value={estadoCivil} onValueChange={setEstadoCivil} disabled={guardando || subiendoContrato}>
+                      <SelectTrigger id="estadoCivil">
+                        <SelectValue placeholder="Seleccione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SOLTERO/A">Soltero/a</SelectItem>
+                        <SelectItem value="CASADO/A">Casado/a</SelectItem>
+                        <SelectItem value="DIVORCIADO/A">Divorciado/a</SelectItem>
+                        <SelectItem value="VIUDO/A">Viudo/a</SelectItem>
+                        <SelectItem value="UNION LIBRE">Unión Libre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaNacimiento">Fecha de Nacimiento</Label>
+                    <Input
+                      id="fechaNacimiento"
+                      type="date"
+                      value={fechaNacimiento}
+                      onChange={(e) => setFechaNacimiento(e.target.value)}
+                      disabled={guardando || subiendoContrato}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="tipo">Tipo</Label>
@@ -736,18 +719,11 @@ export default function Benefactores() {
 
                   <div className="space-y-2">
                     <Label htmlFor="convenio">Número de Convenio</Label>
-                    <Input
-                      id="convenio"
-                      placeholder="CONV-2024-001"
-                      value={convenio}
-                      onChange={(e) => setConvenio(e.target.value)}
-                      disabled={guardando || subiendoContrato}
-                    />
-                    {convenioSugerido && (
-                      <p className="text-xs text-gray-500">
-                        Sugerido automáticamente: <span className="font-mono">{convenioSugerido}</span>
-                      </p>
-                    )}
+                    <div className="h-10 px-3 py-2 bg-gray-100 border border-gray-300 rounded-md flex items-center">
+                      <span className="font-mono text-sm text-gray-600">
+                        {convenioSugerido || "Generando..."}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -813,22 +789,83 @@ export default function Benefactores() {
                 </div>
 
                 {tipoAfiliacion === "individual" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="cuenta">Número de Cuenta Bancaria</Label>
-                    <Input
-                      id="cuenta"
-                      placeholder="Ingrese número de cuenta"
-                      value={cuentaBancaria}
-                      onChange={(e) => setCuentaBancaria(e.target.value)}
-                      disabled={guardando || subiendoContrato}
-                    />
-                  </div>
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="cuenta">Número de Cuenta Bancaria</Label>
+                        <Input
+                          id="cuenta"
+                          placeholder="Ingrese número de cuenta"
+                          value={cuentaBancaria}
+                          onChange={(e) => setCuentaBancaria(e.target.value.toUpperCase())}
+                          disabled={guardando || subiendoContrato}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="bancoEmisor">Banco</Label>
+                        <Select
+                          value={bancoEmisor}
+                          onValueChange={setBancoEmisor}
+                          disabled={guardando || subiendoContrato}
+                        >
+                          <SelectTrigger id="bancoEmisor">
+                            <SelectValue placeholder="Seleccione un banco" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bancos.map((banco) => (
+                              <SelectItem key={banco.id_banco} value={banco.nombre}>
+                                {banco.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Campos de Tarjeta de Crédito */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="numCuentaTc">Número de Tarjeta (Opcional)</Label>
+                        <Input
+                          id="numCuentaTc"
+                          placeholder="XXXX XXXX XXXX XXXX"
+                          value={numCuentaTc}
+                          onChange={(e) => setNumCuentaTc(e.target.value.replace(/\s/g, ''))}
+                          maxLength={19}
+                          disabled={guardando || subiendoContrato}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tipoCuenta">Tipo de Cuenta</Label>
+                        <Select value={tipoCuenta} onValueChange={setTipoCuenta} disabled={guardando || subiendoContrato}>
+                          <SelectTrigger id="tipoCuenta">
+                            <SelectValue placeholder="Seleccione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CORRIENTE">Corriente</SelectItem>
+                            <SelectItem value="AHORROS">Ahorros</SelectItem>
+                            <SelectItem value="CREDITO">Crédito</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="fechaCarga">Fecha de Carga</Label>
                     <Input id="fechaCarga" type="text" value={new Date().toLocaleDateString("es-EC")} disabled />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaSuscripcion">Fecha de Suscripción</Label>
+                    <Input
+                      id="fechaSuscripcion"
+                      type="date"
+                      value={fechaSuscripcion}
+                      onChange={(e) => setFechaSuscripcion(e.target.value)}
+                      disabled={guardando || subiendoContrato}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mesProduccion">Mes de Producción</Label>
@@ -848,7 +885,7 @@ export default function Benefactores() {
                     id="direccion"
                     placeholder="Calle principal, número, referencia"
                     value={direccion}
-                    onChange={(e) => setDireccion(e.target.value)}
+                    onChange={(e) => setDireccion(e.target.value.toUpperCase())}
                     disabled={guardando || subiendoContrato}
                   />
                 </div>
@@ -946,6 +983,19 @@ export default function Benefactores() {
                       disabled={guardando || subiendoContrato}
                     />
                   </div>
+                </div>
+
+                {/* Campo de Observación */}
+                <div className="space-y-2">
+                  <Label htmlFor="observacion">Observación</Label>
+                  <Textarea
+                    id="observacion"
+                    placeholder="Notas o comentarios adicionales sobre el benefactor..."
+                    value={observacion}
+                    onChange={(e) => setObservacion(e.target.value.toUpperCase())}
+                    rows={3}
+                    disabled={guardando || subiendoContrato}
+                  />
                 </div>
 
                 {/* ✅ Contrato PDF (OBLIGATORIO) */}
@@ -1060,7 +1110,7 @@ export default function Benefactores() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1 font-medium">Titulares</p>
-                <p className="text-3xl font-bold text-gray-900">{titularesVisiblesEnTabla.length}</p>
+                <p className="text-3xl font-bold text-gray-900">{benefactores.filter(b => b.tipo_benefactor === "TITULAR").length}</p>
               </div>
               <User className="h-10 w-10 text-green-500" />
             </div>
@@ -1072,7 +1122,7 @@ export default function Benefactores() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1 font-medium">Dependientes</p>
-                <p className="text-3xl font-bold text-gray-900">{dependientesVisiblesEnTabla.length}</p>
+                <p className="text-3xl font-bold text-gray-900">{benefactores.filter(b => b.tipo_benefactor === "DEPENDIENTE").length}</p>
               </div>
               <Users className="h-10 w-10 text-purple-500" />
             </div>
@@ -1082,11 +1132,11 @@ export default function Benefactores() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative md:col-span-1">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar por nombre, cédula o convenio"
+              placeholder="Buscar por nombre, cédula o N° convenio..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="pl-10"
@@ -1094,7 +1144,7 @@ export default function Benefactores() {
           </div>
 
           <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Filtrar por estado" />
             </SelectTrigger>
             <SelectContent>
@@ -1105,381 +1155,216 @@ export default function Benefactores() {
           </Select>
 
           <Select value={ciudadFilter} onValueChange={setCiudadFilter}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Filtrar por ciudad" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todas las ciudades</SelectItem>
-              {Object.values(ciudadesPorProvincia)
-                .flat()
-                .map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
+              {ciudadesUnicas.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
+
+          <Select value={tipoFilter} onValueChange={setTipoFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los tipos</SelectItem>
+              <SelectItem value="TITULAR">Titular</SelectItem>
+              <SelectItem value="DEPENDIENTE">Dependiente</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(globalFilter || estadoFilter !== "todos" || ciudadFilter !== "todos" || tipoFilter !== "todos") && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setGlobalFilter("");
+                setEstadoFilter("todos");
+                setCiudadFilter("todos");
+                setTipoFilter("todos");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="titulares" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-auto sm:max-w-md">
-          <TabsTrigger value="titulares" className="text-sm sm:text-base py-2">
-            Titulares ({datosTitularesFiltrados.length})
-          </TabsTrigger>
-          <TabsTrigger value="dependientes" className="text-sm sm:text-base py-2">
-            Dependientes ({datosDependientesFiltrados.length})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="titulares" className="mt-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            {/* Tabla desktop */}
-            <div className="hidden md:block overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  {tablaTitulares.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id} className="bg-gray-50">
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} className="text-gray-700 font-semibold">
-                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                            <div
-                              className="flex items-center gap-2 cursor-pointer select-none hover:text-gray-900"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                const toggleSorting = header.column.getToggleSortingHandler();
-                                toggleSorting?.(e);
-                              }}
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <ArrowUpDown className="h-4 w-4" />
-                            </div>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
+      {/* Tabla única de benefactores */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
+        {/* Tabla desktop */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {tablaBenefactores.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="bg-gray-50">
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id} className="text-gray-700 font-semibold">
+                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                        <div
+                          className="flex items-center gap-2 cursor-pointer select-none hover:bg-gray-100 rounded px-2 py-1 -mx-2 -my-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const toggleSorting = header.column.getToggleSortingHandler();
+                            toggleSorting?.(e);
+                          }}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </TableHead>
                   ))}
-                </TableHeader>
-                <TableBody>
-                  {tablaTitulares.getRowModel().rows.length > 0 ? (
-                    tablaTitulares.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} className="hover:bg-gray-50">
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columnasTitulares.length} className="text-center py-12 text-gray-500">
-                        No se encontraron titulares con los filtros aplicados
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {tablaBenefactores.getRowModel().rows.length > 0 ? (
+                tablaBenefactores.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="hover:bg-gray-50">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Vista móvil - Cards */}
-            <div className="md:hidden p-4 space-y-4">
-              {tablaTitulares.getRowModel().rows.length > 0 ? (
-                tablaTitulares.getRowModel().rows.map((row) => {
-                  const benefactor = row.original;
-                  return (
-                    <Card key={benefactor.id_benefactor} className="border-2">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
-                            <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
-                          </div>
-                          <Badge
-                            className={
-                              benefactor.estado === "ACTIVO"
-                                ? "bg-green-500 hover:bg-green-600 text-white"
-                                : "bg-gray-400 hover:bg-gray-500 text-white"
-                            }
-                          >
-                            {benefactor.estado}
-                          </Badge>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-xs text-gray-500">Tipo</p>
-                            <Badge variant="outline" className="border-blue-500 text-blue-700">
-                              {benefactor.tipo_benefactor}
-                            </Badge>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Ciudad</p>
-                            <p className="font-medium">{benefactor.ciudad}</p>
-                          </div>
-                        </div>
-
-                        <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
-                          <Button variant="outline" size="sm" className="w-full">
-                            <Eye className="h-4 w-4 mr-2" />
-                            Ver detalles
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                    ))}
+                  </TableRow>
+                ))
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No se encontraron titulares con los filtros aplicados
-                </div>
+                <TableRow>
+                  <TableCell colSpan={columnasBenefactores.length} className="text-center py-12 text-gray-500">
+                    No se encontraron benefactores con los filtros aplicados
+                  </TableCell>
+                </TableRow>
               )}
-            </div>
+            </TableBody>
+          </Table>
+        </div>
 
-            {/* Paginación */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-              <div className="text-sm text-gray-600">
-                Mostrando {tablaTitulares.getState().pagination.pageIndex * tablaTitulares.getState().pagination.pageSize + 1} a{" "}
-                {Math.min(
-                  (tablaTitulares.getState().pagination.pageIndex + 1) * tablaTitulares.getState().pagination.pageSize,
-                  datosTitularesFiltrados.length
-                )}{" "}
-                de {datosTitularesFiltrados.length} registros
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaTitulares.setPageIndex(0)}
-                  disabled={!tablaTitulares.getCanPreviousPage()}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaTitulares.previousPage()}
-                  disabled={!tablaTitulares.getCanPreviousPage()}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Página {tablaTitulares.getState().pagination.pageIndex + 1} de {tablaTitulares.getPageCount()}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaTitulares.nextPage()}
-                  disabled={!tablaTitulares.getCanNextPage()}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaTitulares.setPageIndex(tablaTitulares.getPageCount() - 1)}
-                  disabled={!tablaTitulares.getCanNextPage()}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <Select
-                value={tablaTitulares.getState().pagination.pageSize.toString()}
-                onValueChange={(value) => tablaTitulares.setPageSize(Number(value))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 30, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={pageSize.toString()}>
-                      {pageSize} por página
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* Vista móvil - Cards */}
+        <div className="md:hidden p-6 space-y-4">
+          {tablaBenefactores.getRowModel().rows.length > 0 ? (
+            tablaBenefactores.getRowModel().rows.map((row) => {
+              const benefactor = row.original;
+              return (
+                <Card key={benefactor.id_benefactor} className="border-2">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
+                        <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
+                      </div>
+                      <Badge
+                        className={
+                          benefactor.estado === "ACTIVO"
+                            ? "bg-green-500 hover:bg-green-600 text-white"
+                            : "bg-gray-400 hover:bg-gray-500 text-white"
+                        }
+                      >
+                        {benefactor.estado}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-500">Tipo</p>
+                        <Badge variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
+                          {benefactor.tipo_benefactor}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Ciudad</p>
+                        <p className="font-medium">{benefactor.ciudad}</p>
+                      </div>
+                    </div>
+
+                    <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
+                      <Button variant="outline" size="sm" className="w-full">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Ver detalles
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No se encontraron benefactores con los filtros aplicados
             </div>
+          )}
+        </div>
+
+        {/* Paginación */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
+          <div className="text-sm text-gray-600">
+            Mostrando {tablaBenefactores.getState().pagination.pageIndex * tablaBenefactores.getState().pagination.pageSize + 1} a{" "}
+            {Math.min(
+              (tablaBenefactores.getState().pagination.pageIndex + 1) * tablaBenefactores.getState().pagination.pageSize,
+              benefactoresFiltrados.length
+            )}{" "}
+            de {benefactoresFiltrados.length} registros
           </div>
-        </TabsContent>
-
-        <TabsContent value="dependientes" className="mt-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            {/* Tabla desktop */}
-            <div className="hidden md:block overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  {tablaDependientes.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id} className="bg-gray-50">
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id} className="text-gray-700 font-semibold">
-                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                            <div
-                              className="flex items-center gap-2 cursor-pointer select-none hover:text-gray-900"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                const toggleSorting = header.column.getToggleSortingHandler();
-                                toggleSorting?.(e);
-                              }}
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <ArrowUpDown className="h-4 w-4" />
-                            </div>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {tablaDependientes.getRowModel().rows.length > 0 ? (
-                    tablaDependientes.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} className="hover:bg-gray-50">
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columnasDependientes.length} className="text-center py-12 text-gray-500">
-                        No se encontraron dependientes con los filtros aplicados
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Vista móvil - Cards */}
-            <div className="md:hidden p-4 space-y-4">
-              {tablaDependientes.getRowModel().rows.length > 0 ? (
-                tablaDependientes.getRowModel().rows.map((row) => {
-                  const benefactor = row.original;
-                  return (
-                    <Card key={benefactor.id_benefactor} className="border-2">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
-                            <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
-                          </div>
-                          <Badge
-                            className={
-                              benefactor.estado === "ACTIVO"
-                                ? "bg-green-500 hover:bg-green-600 text-white"
-                                : "bg-gray-400 hover:bg-gray-500 text-white"
-                            }
-                          >
-                            {benefactor.estado}
-                          </Badge>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-xs text-gray-500">Tipo</p>
-                            <Badge variant="outline" className="border-purple-500 text-purple-700">
-                              {benefactor.tipo_benefactor}
-                            </Badge>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Ciudad</p>
-                            <p className="font-medium">{benefactor.ciudad}</p>
-                          </div>
-                        </div>
-
-                        <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
-                          <Button variant="outline" size="sm" className="w-full">
-                            <Eye className="h-4 w-4 mr-2" />
-                            Ver detalles
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No se encontraron dependientes con los filtros aplicados
-                </div>
-              )}
-            </div>
-
-            {/* Paginación */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-              <div className="text-sm text-gray-600">
-                Mostrando {tablaDependientes.getState().pagination.pageIndex * tablaDependientes.getState().pagination.pageSize + 1} a{" "}
-                {Math.min(
-                  (tablaDependientes.getState().pagination.pageIndex + 1) * tablaDependientes.getState().pagination.pageSize,
-                  datosDependientesFiltrados.length
-                )}{" "}
-                de {datosDependientesFiltrados.length} registros
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaDependientes.setPageIndex(0)}
-                  disabled={!tablaDependientes.getCanPreviousPage()}
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaDependientes.previousPage()}
-                  disabled={!tablaDependientes.getCanPreviousPage()}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Página {tablaDependientes.getState().pagination.pageIndex + 1} de {tablaDependientes.getPageCount()}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaDependientes.nextPage()}
-                  disabled={!tablaDependientes.getCanNextPage()}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => tablaDependientes.setPageIndex(tablaDependientes.getPageCount() - 1)}
-                  disabled={!tablaDependientes.getCanNextPage()}
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <Select
-                value={tablaDependientes.getState().pagination.pageSize.toString()}
-                onValueChange={(value) => tablaDependientes.setPageSize(Number(value))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 30, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={pageSize.toString()}>
-                      {pageSize} por página
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => tablaBenefactores.setPageIndex(0)}
+              disabled={!tablaBenefactores.getCanPreviousPage()}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => tablaBenefactores.previousPage()}
+              disabled={!tablaBenefactores.getCanPreviousPage()}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-gray-600">
+              Página {tablaBenefactores.getState().pagination.pageIndex + 1} de {tablaBenefactores.getPageCount()}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => tablaBenefactores.nextPage()}
+              disabled={!tablaBenefactores.getCanNextPage()}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => tablaBenefactores.setPageIndex(tablaBenefactores.getPageCount() - 1)}
+              disabled={!tablaBenefactores.getCanNextPage()}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
           </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="text-sm text-gray-600 bg-white rounded-lg p-4 border border-gray-200">
-        Mostrando {datosTitularesFiltrados.length + datosDependientesFiltrados.length} benefactores en total
+          <Select
+            value={tablaBenefactores.getState().pagination.pageSize.toString()}
+            onValueChange={(value) => tablaBenefactores.setPageSize(Number(value))}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 30, 50].map((pageSize) => (
+                <SelectItem key={pageSize} value={pageSize.toString()}>
+                  {pageSize} por página
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

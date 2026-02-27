@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Users, Wallet, TrendingUp, CheckSquare } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { useNavigate } from "react-router";
@@ -6,6 +6,18 @@ import { useAuth } from "../contexts/AuthContext";
 import { benefactoresService } from "../services/benefactores.service";
 import { cobrosService } from "../services/cobros.service";
 import { aprobacionesService } from "../services/aprobaciones.service";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -14,13 +26,15 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     benefactoresTotal: 0,
     totalRecaudado: "0",
+    totalEsperado: "0",
     porcentajeRecaudacion: "0",
     pendientesAprobacion: 0,
   });
+  const [estadoAportes, setEstadoAportes] = useState<any[]>([]);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [permisos?.benefactores_lectura, permisos?.cartera_lectura, permisos?.aprobaciones]);
 
   const loadDashboardData = async () => {
     try {
@@ -43,6 +57,10 @@ export default function Dashboard() {
           cobrosService.getEstadisticas()
             .then(res => ({ type: 'cobros', data: res.data }))
         );
+        promises.push(
+          cobrosService.getEstadoAportesMensualesActual()
+            .then(res => ({ type: 'estadoAportes', data: res.data || [] }))
+        );
       }
 
       // Cargar aprobaciones si tiene permiso
@@ -55,15 +73,24 @@ export default function Dashboard() {
 
       const results = await Promise.all(promises);
       
-      const newStats = { ...stats };
+      const newStats = {
+        benefactoresTotal: 0,
+        totalRecaudado: "0",
+        totalEsperado: "0",
+        porcentajeRecaudacion: "0",
+        pendientesAprobacion: 0,
+      };
       results.forEach(result => {
         if (result.type === 'benefactores') {
           newStats.benefactoresTotal = result.data;
         } else if (result.type === 'cobros') {
           newStats.totalRecaudado = result.data.total_recaudado;
+          newStats.totalEsperado = result.data.total_esperado;
           newStats.porcentajeRecaudacion = result.data.porcentaje_recaudacion;
         } else if (result.type === 'aprobaciones') {
           newStats.pendientesAprobacion = result.data;
+        } else if (result.type === 'estadoAportes') {
+          setEstadoAportes(result.data);
         }
       });
 
@@ -79,6 +106,38 @@ export default function Dashboard() {
     return `$${parseFloat(value).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const chartEstadoAportes = useMemo(() => {
+    const aportados = estadoAportes.filter((item) => item.estado_cobro === "APORTADO" || item.estado_aporte === "APORTADO").length;
+    const noAportados = Math.max(estadoAportes.length - aportados, 0);
+    return [
+      { name: "Aportado", value: aportados, color: "#16a34a" },
+      { name: "No aportado", value: noAportados, color: "#dc2626" },
+    ];
+  }, [estadoAportes]);
+
+  const chartTipoBenefactor = useMemo(() => {
+    const base = {
+      TITULAR: { tipo: "Titular", aportado: 0, noAportado: 0 },
+      DEPENDIENTE: { tipo: "Dependiente", aportado: 0, noAportado: 0 },
+    } as const;
+    const mutable = {
+      TITULAR: { ...base.TITULAR },
+      DEPENDIENTE: { ...base.DEPENDIENTE },
+    };
+
+    estadoAportes.forEach((item) => {
+      const key = item.es_titular ? "TITULAR" : "DEPENDIENTE";
+      const estado = item.estado_cobro || item.estado_aporte;
+      if (estado === "APORTADO") {
+        mutable[key].aportado += 1;
+      } else {
+        mutable[key].noAportado += 1;
+      }
+    });
+
+    return [mutable.TITULAR, mutable.DEPENDIENTE];
+  }, [estadoAportes]);
+
   const dashboardCards = [
     {
       title: "Total Benefactores",
@@ -91,7 +150,7 @@ export default function Dashboard() {
     {
       title: "Recaudado Este Mes",
       value: loading ? "..." : formatCurrency(stats.totalRecaudado),
-      change: `${stats.porcentajeRecaudacion}% de recaudación`,
+      change: `${stats.porcentajeRecaudacion}% de recaudación de ${formatCurrency(stats.totalEsperado)}`,
       icon: Wallet,
       color: "bg-green-500",
       show: permisos?.cartera_lectura,
@@ -170,6 +229,59 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      {permisos?.cartera_lectura && (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+          <Card className="xl:col-span-2 border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Distribución de aportes</h3>
+              <p className="text-xs text-gray-500 mb-4">Estado actual de aportado vs no aportado</p>
+              <div className="h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={chartEstadoAportes} dataKey="value" nameKey="name" innerRadius={65} outerRadius={95} paddingAngle={4}>
+                      {chartEstadoAportes.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {chartEstadoAportes.map((item) => (
+                  <div key={item.name} className="rounded-md border border-gray-200 px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-gray-600">{item.name}</span>
+                    </div>
+                    <p className="font-semibold text-gray-900">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-3 border-gray-200 shadow-sm">
+            <CardContent className="p-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Aportes por tipo de benefactor</h3>
+              <p className="text-xs text-gray-500 mb-4">Comparativo entre titulares y dependientes</p>
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartTipoBenefactor} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="tipo" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="aportado" name="Aportado" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="noAportado" name="No aportado" fill="#dc2626" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Información del sistema */}
       <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-gray-200">

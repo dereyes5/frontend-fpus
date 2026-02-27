@@ -181,12 +181,12 @@ export default function Login() {
               "
             >
               {submitting ? (
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center text-white">
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Iniciando sesión...
                 </div>
               ) : (
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-center text-white">
                   Iniciar sesión
                   <ArrowRight className="w-5 h-5" />
                 </div>
