@@ -1,5 +1,4 @@
 import api from './api';
-import type { Notificacion, EstadisticasNotificaciones } from '../types';
 
 /**
  * Servicio para gestión de notificaciones

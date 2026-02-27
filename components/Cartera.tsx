@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { DollarSign, TrendingUp, Users, Search, History, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
@@ -86,7 +86,7 @@ export default function Cartera() {
     return `$${parseFloat(value).toFixed(2)}`;
   };
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | null) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleDateString('es-EC', {
       year: 'numeric',
@@ -177,8 +177,9 @@ export default function Cartera() {
 
       // Mostrar resumen
       if (resultado.success) {
+        const totalRegistros = (resultado as any)?.lote?.total_registros ?? (resultado as any)?.data?.lote?.total_registros ?? 0;
         toast.success(
-          `Importación exitosa: ${resultado.lote?.total_registros} registros procesados`,
+          `Importación exitosa: ${totalRegistros} registros procesados`,
           { duration: 5000 }
         );
 
