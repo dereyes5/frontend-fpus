@@ -315,6 +315,7 @@ export default function Cartera() {
                 </div>
               </TableHead>
               <TableHead className="text-center">Cédula</TableHead>
+              <TableHead className="text-center">Corporación</TableHead>
               <TableHead className="text-center">Monto Esperado</TableHead>
               <TableHead className="text-center">Monto Aportado</TableHead>
               <TableHead className="text-center">Estado</TableHead>
@@ -324,7 +325,7 @@ export default function Cartera() {
           <TableBody>
             {data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                   No hay registros para mostrar
                 </TableCell>
               </TableRow>
@@ -342,6 +343,7 @@ export default function Cartera() {
                   </TableCell>
                   <TableCell className="text-center font-medium">{item.nombre_completo}</TableCell>
                   <TableCell className="text-center font-mono text-sm">{item.cedula}</TableCell>
+                  <TableCell className="text-center">{item.corporacion || "N/A"}</TableCell>
                   <TableCell className="text-center">{formatCurrency(item.monto_esperado)}</TableCell>
                   <TableCell className="text-center font-semibold text-green-600">
                     {formatCurrency(item.monto_aportado)}
@@ -391,6 +393,10 @@ export default function Cartera() {
                   <div>
                     <p className="text-xs text-gray-500">Monto Aportado</p>
                     <p className="font-semibold text-green-600">{formatCurrency(item.monto_aportado)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500">Corporación</p>
+                    <p className="text-sm">{item.corporacion || "N/A"}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-xs text-gray-500">Última Fecha</p>
@@ -509,7 +515,7 @@ export default function Cartera() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 font-medium">Total Benefactores</p>
-                  <p className="text-3xl font-bold text-gray-900">{estadisticas.total_titulares}</p>
+                  <p className="text-3xl font-bold text-gray-900">{estadisticas.total_benefactores}</p>
                 </div>
               </div>
             </CardContent>
@@ -723,8 +729,9 @@ export default function Cartera() {
                     <li>El archivo debe ser formato Excel (.xlsx o .xls)</li>
                     <li>Debe contener las columnas: Estado, cod_tercero, fecha_transmision</li>
                     <li>El sistema identificará automáticamente el mes/año del lote</li>
-                    <li>Se procesan titulares aprobados y dependientes individual con convenio propio</li>
-                    <li>Dependientes corporativo se actualizan desde el titular (pago consolidado)</li>
+                    <li>El Excel debe cargarse por titular (convenio titular)</li>
+                    <li>Si llega convenio de dependiente, la fila se rechaza</li>
+                    <li>El estado del titular se propaga a sus dependientes del grupo</li>
                   </ul>
                 </div>
 

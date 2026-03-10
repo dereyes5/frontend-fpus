@@ -5,124 +5,114 @@ import {
   Usuario,
   CambiarPasswordRequest,
   ApiResponse,
+  PermisosGranulares,
 } from '../types';
 
+export interface UsuarioAdmin {
+  id_usuario: number;
+  nombre_usuario: string;
+  cargo?: string;
+  activo: boolean;
+  fecha_inactivacion?: string | null;
+  id_usuario_inactiva?: number | null;
+  id_sucursal?: number;
+  sucursal?: {
+    id_sucursal: number;
+    iniciales: string;
+    nombre: string;
+  } | null;
+  roles?: Array<{ id_rol: number; nombre: string }>;
+  permisos?: PermisosGranulares | null;
+}
+
 export const authService = {
-  // Login
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
     return response.data;
   },
 
-  // Obtener perfil del usuario actual
   async getPerfil(): Promise<ApiResponse<Usuario>> {
     const response = await api.get<ApiResponse<Usuario>>('/auth/perfil');
     return response.data;
   },
 
-  // Actualizar cargo del perfil actual
-  async actualizarCargoPerfil(cargo: string): Promise<ApiResponse<Usuario>> {
-    const response = await api.put<ApiResponse<Usuario>>('/auth/perfil/cargo', { cargo });
-    return response.data;
-  },
-
-  // Cambiar contraseña
   async cambiarPassword(data: CambiarPasswordRequest): Promise<ApiResponse<void>> {
     const response = await api.put<ApiResponse<void>>('/auth/cambiar-password', data);
     return response.data;
   },
 
-  // Crear usuario (público)
-  async crearUsuario(data: { nombre_usuario: string; password: string }): Promise<ApiResponse<Usuario>> {
+  async crearUsuario(data: { nombre_usuario: string; password: string; cargo?: string }): Promise<ApiResponse<Usuario>> {
     const response = await api.post<ApiResponse<Usuario>>('/auth/usuarios', data);
     return response.data;
   },
 
-  // Asignar rol a usuario
   async asignarRol(data: { id_usuario: number; id_rol: number }): Promise<ApiResponse<void>> {
     const response = await api.post<ApiResponse<void>>('/auth/usuarios/asignar-rol', data);
     return response.data;
   },
 
-  // Actualizar permisos de usuario
   async actualizarPermisos(
-    idUsuario: number, 
-    permisos: {
-      cartera_lectura: boolean;
-      cartera_escritura: boolean;
-      benefactores_lectura: boolean;
-      benefactores_escritura: boolean;
-      social_lectura: boolean;
-      social_escritura: boolean;
-      configuraciones: boolean;
-      aprobaciones: boolean;
-    }
+    idUsuario: number,
+    permisos: PermisosGranulares
   ): Promise<ApiResponse<void>> {
     const response = await api.put<ApiResponse<void>>(
-      `/auth/usuarios/${idUsuario}/permisos`, 
+      `/auth/usuarios/${idUsuario}/permisos`,
       permisos
     );
     return response.data;
   },
 
-  // Listar todos los usuarios con sus roles y sucursal
-  async obtenerUsuarios(): Promise<ApiResponse<Array<{
-    id_usuario: number;
-    nombre_usuario: string;
-    cargo?: string;
-    roles: Array<{ id_rol: number; nombre: string }>;
-    id_sucursal?: number;
-    sucursal?: {
-      id_sucursal: number;
-      iniciales: string;
-      nombre: string;
-    };
-  }>>> {
-    const response = await api.get<ApiResponse<Array<{
-      id_usuario: number;
-      nombre_usuario: string;
-      cargo?: string;
-      roles: Array<{ id_rol: number; nombre: string }>;
-      id_sucursal?: number;
-      sucursal?: {
-        id_sucursal: number;
-        iniciales: string;
-        nombre: string;
-      };
-    }>>>('/auth/usuarios');
+  async obtenerUsuarios(incluirInactivos = true): Promise<ApiResponse<UsuarioAdmin[]>> {
+    const response = await api.get<ApiResponse<UsuarioAdmin[]>>('/auth/usuarios', {
+      params: { incluir_inactivos: incluirInactivos },
+    });
     return response.data;
   },
 
-  // Alias para compatibilidad
-  async listarUsuarios(): Promise<ApiResponse<Array<{
-    id_usuario: number;
-    nombre_usuario: string;
-    cargo?: string;
-    roles: Array<{ id_rol: number; nombre: string }>;
-    id_sucursal?: number;
-    sucursal?: {
-      id_sucursal: number;
-      iniciales: string;
-      nombre: string;
-    };
-  }>>> {
-    return this.obtenerUsuarios();
+  async listarUsuarios(incluirInactivos = true): Promise<ApiResponse<UsuarioAdmin[]>> {
+    return this.obtenerUsuarios(incluirInactivos);
   },
 
-  // Guardar token y usuario en localStorage
+  async actualizarUsuarioAdmin(
+    idUsuario: number,
+    data: { nombre_usuario: string; cargo: string }
+  ): Promise<ApiResponse<UsuarioAdmin>> {
+    const response = await api.put<ApiResponse<UsuarioAdmin>>(`/auth/usuarios/${idUsuario}`, data);
+    return response.data;
+  },
+
+  async cambiarPasswordUsuarioAdmin(
+    idUsuario: number,
+    data: { password_nueva: string }
+  ): Promise<ApiResponse<void>> {
+    const response = await api.put<ApiResponse<void>>(`/auth/usuarios/${idUsuario}/password`, data);
+    return response.data;
+  },
+
+  async cambiarEstadoUsuario(
+    idUsuario: number,
+    activo: boolean
+  ): Promise<ApiResponse<UsuarioAdmin>> {
+    const response = await api.patch<ApiResponse<UsuarioAdmin>>(`/auth/usuarios/${idUsuario}/estado`, { activo });
+    return response.data;
+  },
+
+  async eliminarUsuarioSoft(idUsuario: number): Promise<ApiResponse<UsuarioAdmin>> {
+    const response = await api.delete<ApiResponse<UsuarioAdmin>>(`/auth/usuarios/${idUsuario}`);
+    return response.data;
+  },
+
   saveAuth(token: string, usuario: Usuario): void {
     localStorage.setItem('fpus_token', token);
     localStorage.setItem('fpus_user', JSON.stringify(usuario));
   },
 
-  // Limpiar autenticación
   clearAuth(): void {
     localStorage.removeItem('fpus_token');
     localStorage.removeItem('fpus_user');
     localStorage.removeItem('fpus_permisos');
   },
 
-  // Obtener usuario del localStorage
   getUser(): Usuario | null {
     const userStr = localStorage.getItem('fpus_user');
     if (userStr) {
@@ -135,7 +125,6 @@ export const authService = {
     return null;
   },
 
-  // Verificar si está autenticado
   isAuthenticated(): boolean {
     return !!localStorage.getItem('fpus_token');
   },

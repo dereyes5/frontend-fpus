@@ -43,13 +43,13 @@ import { Alert, AlertDescription } from './ui/alert';
 interface Usuario {
   id_usuario: number;
   nombre_usuario: string;
-  roles: Array<{ id_rol: number; nombre: string }>;
+  roles?: Array<{ id_rol: number; nombre: string }>;
   id_sucursal?: number;
   sucursal?: {
     id_sucursal: number;
     iniciales: string;
     nombre: string;
-  };
+  } | null;
 }
 
 interface Rol {

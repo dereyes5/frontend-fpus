@@ -10,6 +10,7 @@ import SocialAprobaciones from "../components/SocialAprobaciones";
 import Cartera from "../components/Cartera";
 import Configuracion from "../components/Configuracion";
 import Aprobaciones from "../components/Aprobaciones";
+import Perfil from "../components/Perfil";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 
 export const router = createBrowserRouter([
@@ -64,6 +65,10 @@ export const router = createBrowserRouter([
       {
         path: "configuracion",
         element: <ProtectedRoute requiredPermissions={["configuraciones"]}><Configuracion /></ProtectedRoute>
+      },
+      {
+        path: "perfil",
+        element: <ProtectedRoute><Perfil /></ProtectedRoute>
       },
     ],
   },

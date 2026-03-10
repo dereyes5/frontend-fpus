@@ -3,6 +3,8 @@ export interface Usuario {
   id_usuario: number;
   nombre_usuario: string;
   cargo?: string;
+  activo?: boolean;
+  fecha_inactivacion?: string | null;
   permisos: PermisosGranulares;
 }
 
@@ -69,7 +71,7 @@ export interface Recurso {
 export type TipoBenefactor = 'TITULAR' | 'DEPENDIENTE';
 export type EstadoRegistro = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
 export type EstadoBenefactor = 'ACTIVO' | 'INACTIVO';
-export type TipoAfiliacion = 'INDIVIDUAL' | 'FAMILIAR';
+export type TipoAfiliacion = 'individual' | 'corporativo';
 
 export interface Benefactor {
   id_benefactor: number;
@@ -86,6 +88,7 @@ export interface Benefactor {
   fecha_nacimiento: string;
   fecha_suscripcion?: string;
   tipo_afiliacion?: TipoAfiliacion;
+  corporacion?: string;
   cuenta?: string;
   n_convenio?: string;
   mes_prod?: string;
@@ -119,6 +122,7 @@ export interface BenefactorCreateRequest {
   fecha_nacimiento?: string;
   fecha_suscripcion?: string;
   tipo_afiliacion?: TipoAfiliacion;
+  corporacion?: string;
   cuenta?: string;
   n_convenio?: string;
   mes_prod?: string;
@@ -132,6 +136,8 @@ export interface BenefactorCreateRequest {
 }
 
 export interface BenefactorUpdateRequest {
+  tipo_afiliacion?: TipoAfiliacion;
+  corporacion?: string;
   nombre_completo?: string;
   telefono?: string;
   email?: string;
@@ -178,6 +184,7 @@ export interface EstadoPago {
   nombre_completo: string;
   cedula: string;
   n_convenio?: string;
+  corporacion?: string | null;
   monto_esperado: string;
   monto_aportado: string;
   estado_aporte: EstadoPagoType;
@@ -190,6 +197,7 @@ export interface EstadoPago {
 
 export interface Estadisticas {
   total_titulares: string;
+  total_benefactores: string;
   aportados: string;
   no_aportados: string;
   total_esperado: string;

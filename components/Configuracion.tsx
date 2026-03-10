@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2, Lock, RefreshCw, CheckCircle2, XCircle, MapPin, Landmark, Camera, Upload } from "lucide-react";
+﻿import { useState, useEffect } from "react";
+import { User, Shield, UserCog, Users, Building2, Plus, Pencil, Trash2, Lock, RefreshCw, CheckCircle2, XCircle, MapPin, Landmark, Camera, Upload, Image as ImageIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import Bancos from "./Bancos";
 import { Button } from "./ui/button";
@@ -34,6 +34,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { authService } from "../services/auth.service";
 import sucursalesService, { Sucursal, CrearSucursalDto } from "../services/sucursales.service";
 import { fotoPerfilService } from "../services/fotoPerfil.service";
+import { aparienciaService, type AparienciaData } from "../services/apariencia.service";
+import { DEFAULT_LOGIN_CAROUSEL, DEFAULT_LOGIN_LOGO } from "../config/aparienciaDefaults";
 import { toast } from "sonner";
 import { PermisosGranulares } from "../types";
 
@@ -41,28 +43,32 @@ interface UsuarioConPermisos {
   id_usuario: number;
   nombre_usuario: string;
   cargo?: string;
+  activo?: boolean;
+  fecha_inactivacion?: string | null;
   permisos?: PermisosGranulares | null;
   id_sucursal?: number;
   sucursal?: {
     id_sucursal: number;
     iniciales: string;
     nombre: string;
-  };
+  } | null;
 }
 
 export default function Configuracion() {
   const { user, permisos } = useAuth();
 
-  // Estados para administración de usuarios y permisos
+  // Estados para administracion de usuarios y permisos
   const [usuarios, setUsuarios] = useState<UsuarioConPermisos[]>([]);
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
   const [updatingPermisos, setUpdatingPermisos] = useState<number | null>(null);
 
-  // Estados para creación de usuarios
+  // Estados para creacion de usuarios
   const [nuevoUsuario, setNuevoUsuario] = useState("");
   const [nuevoPassword, setNuevoPassword] = useState("");
   const [nuevoPasswordConfirmar, setNuevoPasswordConfirmar] = useState("");
+  const [nuevoCargo, setNuevoCargo] = useState("AGENTE");
   const [creandoUsuario, setCreandoUsuario] = useState(false);
+  const [incluirInactivos, setIncluirInactivos] = useState(true);
 
   // Estados para sucursales
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -83,9 +89,13 @@ export default function Configuracion() {
   const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [keyFoto, setKeyFoto] = useState(Date.now()); // Para forzar refresh de la imagen
-  const [cargoPerfil, setCargoPerfil] = useState("");
-  const [guardandoCargo, setGuardandoCargo] = useState(false);
-
+  const [apariencia, setApariencia] = useState<AparienciaData | null>(null);
+  const [cargandoApariencia, setCargandoApariencia] = useState(false);
+  const [guardandoApariencia, setGuardandoApariencia] = useState(false);
+  const [logoArchivo, setLogoArchivo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [carruselArchivos, setCarruselArchivos] = useState<Array<File | null>>([]);
+  const [carruselPreviews, setCarruselPreviews] = useState<Array<string | null>>([]);
   const puedeConfigurar = permisos?.configuraciones ?? false;
 
   useEffect(() => {
@@ -98,7 +108,7 @@ export default function Configuracion() {
   const cargarUsuarios = async () => {
     try {
       setLoadingUsuarios(true);
-      const response = await authService.obtenerUsuarios();
+      const response = await authService.obtenerUsuarios(incluirInactivos);
       setUsuarios(response.data || []);
     } catch (error: any) {
       toast.error("Error al cargar usuarios");
@@ -119,7 +129,186 @@ export default function Configuracion() {
     }
   };
 
-  // Función para actualizar un permiso individual
+  const limpiarObjectUrl = (url: string | null) => {
+    if (url && url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const validarImagen = (file: File): boolean => {
+    const tiposPermitidos = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!tiposPermitidos.includes(file.type)) {
+      toast.error("Solo se permiten imagenes JPG, PNG o WEBP");
+      return false;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("La imagen no puede superar los 8MB");
+      return false;
+    }
+    return true;
+  };
+
+  const cargarApariencia = async () => {
+    try {
+      setCargandoApariencia(true);
+      const response = await aparienciaService.obtenerPublica();
+      const data = response.data;
+      setApariencia(data);
+      setCarruselArchivos(Array.from({ length: data.carousel.length }, () => null));
+      setCarruselPreviews(Array.from({ length: data.carousel.length }, () => null));
+    } catch {
+      toast.error("No se pudo cargar la configuracion de apariencia");
+    } finally {
+      setCargandoApariencia(false);
+    }
+  };
+
+  useEffect(() => {
+    if (puedeConfigurar) {
+      cargarApariencia();
+    }
+  }, [puedeConfigurar]);
+
+  useEffect(() => {
+    return () => {
+      limpiarObjectUrl(logoPreview);
+      carruselPreviews.forEach((preview) => limpiarObjectUrl(preview));
+    };
+  }, [logoPreview, carruselPreviews]);
+
+  const seleccionarLogo = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !validarImagen(file)) return;
+
+    limpiarObjectUrl(logoPreview);
+    setLogoArchivo(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const seleccionarCarrusel = (index: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !validarImagen(file)) return;
+
+    setCarruselArchivos((prev) => {
+      const next = [...prev];
+      next[index] = file;
+      return next;
+    });
+    setCarruselPreviews((prev) => {
+      const next = [...prev];
+      limpiarObjectUrl(next[index]);
+      next[index] = URL.createObjectURL(file);
+      return next;
+    });
+  };
+
+  const agregarSlotCarrusel = () => {
+    setCarruselArchivos((prev) => [...prev, null]);
+    setCarruselPreviews((prev) => [...prev, null]);
+  };
+
+  const guardarLogo = async () => {
+    if (!logoArchivo) {
+      toast.error("Selecciona un logo primero");
+      return;
+    }
+
+    try {
+      setGuardandoApariencia(true);
+      const response = await aparienciaService.subirLogo(logoArchivo);
+      setApariencia(response.data);
+      setLogoArchivo(null);
+      limpiarObjectUrl(logoPreview);
+      setLogoPreview(null);
+      toast.success("Logo actualizado exitosamente");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar logo");
+    } finally {
+      setGuardandoApariencia(false);
+    }
+  };
+
+  const eliminarLogoApariencia = async () => {
+    if (!confirm("¿Deseas eliminar el logo configurado?")) return;
+    try {
+      setGuardandoApariencia(true);
+      const response = await aparienciaService.eliminarLogo();
+      setApariencia(response.data);
+      setLogoArchivo(null);
+      limpiarObjectUrl(logoPreview);
+      setLogoPreview(null);
+      toast.success("Logo eliminado");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al eliminar logo");
+    } finally {
+      setGuardandoApariencia(false);
+    }
+  };
+
+  const guardarImagenCarrusel = async (index: number) => {
+    const file = carruselArchivos[index];
+    if (!file) {
+      toast.error("Selecciona una imagen primero");
+      return;
+    }
+
+    try {
+      setGuardandoApariencia(true);
+      const tieneRemota = index < (apariencia?.carousel?.length || 0);
+      const response = tieneRemota
+        ? await aparienciaService.subirCarrusel(index, file)
+        : await aparienciaService.agregarCarrusel(file);
+
+      const data = response.data;
+      setApariencia(data);
+      setCarruselArchivos(Array.from({ length: data.carousel.length }, () => null));
+      setCarruselPreviews((prev) => {
+        prev.forEach((preview) => limpiarObjectUrl(preview));
+        return Array.from({ length: data.carousel.length }, () => null);
+      });
+      toast.success(tieneRemota ? `Imagen ${index + 1} actualizada` : "Imagen agregada al carrusel");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar carrusel");
+    } finally {
+      setGuardandoApariencia(false);
+    }
+  };
+
+  const eliminarImagenCarrusel = async (index: number) => {
+    const tieneRemota = index < (apariencia?.carousel?.length || 0);
+    if (!confirm(`Deseas eliminar la imagen ${index + 1} del carrusel?`)) return;
+
+    if (!tieneRemota) {
+      setCarruselArchivos((prev) => prev.filter((_, i) => i !== index));
+      setCarruselPreviews((prev) => {
+        const preview = prev[index];
+        limpiarObjectUrl(preview || null);
+        return prev.filter((_, i) => i !== index);
+      });
+      return;
+    }
+
+    try {
+      setGuardandoApariencia(true);
+      const response = await aparienciaService.eliminarCarrusel(index);
+      const data = response.data;
+      setApariencia(data);
+      setCarruselArchivos(Array.from({ length: data.carousel.length }, () => null));
+      setCarruselPreviews((prev) => {
+        prev.forEach((preview) => limpiarObjectUrl(preview));
+        return Array.from({ length: data.carousel.length }, () => null);
+      });
+      toast.success(`Imagen ${index + 1} eliminada`);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al eliminar imagen");
+    } finally {
+      setGuardandoApariencia(false);
+    }
+  };
+
+  // Funcion para actualizar un permiso individual
   const togglePermiso = async (
     usuarioId: number,
     permiso: keyof PermisosGranulares,
@@ -148,7 +337,7 @@ export default function Configuracion() {
         aprobaciones_social: false,
       };
 
-      // Crear objeto con todos los permisos, cambiando solo el que se está toggling
+      // Crear objeto con todos los permisos, cambiando solo el que se esta toggling
       const permisosActualizados = {
         cartera_lectura: permisosBase.cartera_lectura ?? false,
         cartera_escritura: permisosBase.cartera_escritura ?? false,
@@ -159,12 +348,12 @@ export default function Configuracion() {
         configuraciones: permisosBase.configuraciones ?? false,
         aprobaciones: permisosBase.aprobaciones ?? false,
         aprobaciones_social: permisosBase.aprobaciones_social ?? false,
-        [permiso]: !valorActual, // Toggle el permiso específico
+        [permiso]: !valorActual, // Toggle el permiso especifico
       };
 
       await authService.actualizarPermisos(usuarioId, permisosActualizados);
 
-      // Actualizar solo el usuario específico en el estado local (sin recargar toda la lista)
+      // Actualizar solo el usuario especifico en el estado local (sin recargar toda la lista)
       setUsuarios(prevUsuarios =>
         prevUsuarios.map(u =>
           u.id_usuario === usuarioId
@@ -191,22 +380,27 @@ export default function Configuracion() {
     }
 
     if (nuevoPassword.length < 6) {
-      toast.error("La contraseña debe tener al menos 6 caracteres");
+      toast.error("La contrasena debe tener al menos 6 caracteres");
       return;
     }
 
     if (nuevoPassword !== nuevoPasswordConfirmar) {
-      toast.error("Las contraseñas no coinciden");
+      toast.error("Las contrasenas no coinciden");
       return;
     }
 
     try {
       setCreandoUsuario(true);
-      await authService.crearUsuario({ nombre_usuario: nuevoUsuario.trim(), password: nuevoPassword });
+      await authService.crearUsuario({
+        nombre_usuario: nuevoUsuario.trim(),
+        password: nuevoPassword,
+        cargo: (nuevoCargo || "AGENTE").toUpperCase().trim(),
+      });
       toast.success("Usuario creado exitosamente");
       setNuevoUsuario("");
       setNuevoPassword("");
       setNuevoPasswordConfirmar("");
+      setNuevoCargo("AGENTE");
       if (puedeConfigurar) {
         await cargarUsuarios();
       }
@@ -248,7 +442,7 @@ export default function Configuracion() {
   };
 
   const handleEliminarSucursal = async (id: number) => {
-    if (!confirm("¿Estás seguro de desactivar esta sucursal?")) return;
+    if (!confirm("¿Estas seguro de desactivar esta sucursal?")) return;
 
     try {
       await sucursalesService.eliminarSucursal(id);
@@ -301,35 +495,10 @@ export default function Configuracion() {
   }, [user, keyFoto]);
 
   useEffect(() => {
-    setCargoPerfil((user?.cargo || "AGENTE").toUpperCase());
-  }, [user?.cargo]);
-
-  const handleActualizarCargo = async () => {
-    const cargo = cargoPerfil.trim().toUpperCase();
-    if (!cargo) {
-      toast.error("El cargo es obligatorio");
-      return;
+    if (puedeConfigurar) {
+      cargarUsuarios();
     }
-
-    try {
-      setGuardandoCargo(true);
-      const response = await authService.actualizarCargoPerfil(cargo);
-
-      const rawUser = localStorage.getItem("fpus_user");
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        parsed.cargo = response?.data?.cargo || cargo;
-        localStorage.setItem("fpus_user", JSON.stringify(parsed));
-      }
-
-      toast.success("Cargo actualizado exitosamente");
-      window.location.reload();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Error al actualizar cargo");
-    } finally {
-      setGuardandoCargo(false);
-    }
-  };
+  }, [incluirInactivos]);
 
   const handleSubirFoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -337,11 +506,11 @@ export default function Configuracion() {
 
     // Validar tipo de archivo
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
-      toast.error('Solo se permiten imágenes JPG, PNG o WEBP');
+      toast.error('Solo se permiten imagenes JPG, PNG o WEBP');
       return;
     }
 
-    // Validar tamaño (5MB)
+    // Validar tamano (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('La imagen no puede superar los 5MB');
       return;
@@ -362,7 +531,7 @@ export default function Configuracion() {
   };
 
   const handleEliminarFoto = async () => {
-    if (!confirm('¿Estás seguro de eliminar tu foto de perfil?')) return;
+    if (!confirm('¿Estas seguro de eliminar tu foto de perfil?')) return;
 
     try {
       await fotoPerfilService.eliminarFoto();
@@ -375,16 +544,72 @@ export default function Configuracion() {
     }
   };
 
+  const handleEditarUsuarioAdmin = async (usuario: UsuarioConPermisos) => {
+    const nombre_usuario = prompt("Nuevo nombre de usuario:", usuario.nombre_usuario)?.trim();
+    if (!nombre_usuario) return;
+
+    const cargo = prompt("Cargo del usuario:", (usuario.cargo || "AGENTE").toUpperCase())?.trim().toUpperCase();
+    if (!cargo) return;
+
+    try {
+      await authService.actualizarUsuarioAdmin(usuario.id_usuario, { nombre_usuario, cargo });
+      toast.success("Usuario actualizado");
+      await cargarUsuarios();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar usuario");
+    }
+  };
+
+  const handleResetPasswordAdmin = async (usuario: UsuarioConPermisos) => {
+    const password_nueva = prompt(`Nueva contrasena para ${usuario.nombre_usuario}:`) || "";
+    if (!password_nueva) return;
+    if (password_nueva.length < 6) {
+      toast.error("La contrasena debe tener al menos 6 caracteres");
+      return;
+    }
+
+    try {
+      await authService.cambiarPasswordUsuarioAdmin(usuario.id_usuario, { password_nueva });
+      toast.success("Contrasena actualizada");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al actualizar contrasena");
+    }
+  };
+
+  const handleCambiarEstadoUsuario = async (usuario: UsuarioConPermisos, activo: boolean) => {
+    const accion = activo ? "activar" : "inactivar";
+    if (!confirm(`Deseas ${accion} al usuario ${usuario.nombre_usuario}?`)) return;
+
+    try {
+      await authService.cambiarEstadoUsuario(usuario.id_usuario, activo);
+      toast.success(`Usuario ${activo ? "activado" : "inactivado"} correctamente`);
+      await cargarUsuarios();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al cambiar estado del usuario");
+    }
+  };
+
+  const handleEliminarUsuarioSoft = async (usuario: UsuarioConPermisos) => {
+    if (!confirm(`Deseas inactivar (eliminacion logica) al usuario ${usuario.nombre_usuario}?`)) return;
+    try {
+      await authService.eliminarUsuarioSoft(usuario.id_usuario);
+      toast.success("Usuario inactivado correctamente");
+      await cargarUsuarios();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al eliminar usuario");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
-        <h1 className="text-3xl font-bold text-white mb-2">Configuración</h1>
-        <p className="text-white/90">Configuración de cuenta y seguridad</p>
+        <h1 className="text-3xl font-bold text-white mb-2">Configuracion</h1>
+        <p className="text-white/90">Configuracion de cuenta y seguridad</p>
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6' : 'grid-cols-1 max-w-md'}`}>
+        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7' : 'grid-cols-1 max-w-md'}`}>
           <TabsTrigger value="perfil" className="text-sm sm:text-base py-3 px-4 gap-2">
             <User className="h-4 w-4" />
             Mi Perfil
@@ -421,6 +646,12 @@ export default function Configuracion() {
               Bancos
             </TabsTrigger>
           )}
+          {puedeConfigurar && (
+            <TabsTrigger value="apariencia" className="text-sm sm:text-base py-3 px-4 gap-2">
+              <ImageIcon className="h-4 w-4" />
+              Apariencia
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Perfil Tab */}
@@ -429,7 +660,7 @@ export default function Configuracion() {
             <CardHeader>
               <CardTitle className="text-gray-900 flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Información del Usuario
+                Informacion del Usuario
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -516,22 +747,11 @@ export default function Configuracion() {
                     <Shield className="h-4 w-4" />
                     Cargo
                   </Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      value={cargoPerfil}
-                      onChange={(e) => setCargoPerfil(e.target.value.toUpperCase())}
-                      placeholder="AGENTE"
-                      maxLength={100}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleActualizarCargo}
-                      disabled={guardandoCargo || !cargoPerfil.trim()}
-                      className="bg-[#0F8F5B] hover:bg-[#0d7a4d] text-white"
-                    >
-                      {guardandoCargo ? "Guardando..." : "Guardar"}
-                    </Button>
-                  </div>
+                  <Input
+                    value={(user?.cargo || "AGENTE").toUpperCase()}
+                    disabled
+                    className="bg-gray-50 mt-1"
+                  />
                 </div>
 
                 {permisos && (
@@ -557,14 +777,14 @@ export default function Configuracion() {
 
               <div className="pt-4 border-t">
                 <p className="text-sm text-gray-600">
-                  Puedes actualizar tu cargo desde este perfil.
+                  El cargo es administrado solo por usuarios con permisos de configuracion.
                 </p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Permisos Tab - Gestión de permisos granulares */}
+        {/* Permisos Tab - Gestion de permisos granulares */}
         {puedeConfigurar && (
           <TabsContent value="roles" className="mt-6">
             <Card className="bg-white border-gray-200">
@@ -581,7 +801,7 @@ export default function Configuracion() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {/* Descripción del sistema */}
+                    {/* Descripcion del sistema */}
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex gap-3">
                         <Shield className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -590,8 +810,8 @@ export default function Configuracion() {
                             Sistema de Permisos Granulares
                           </h4>
                           <p className="text-sm text-blue-800">
-                            Controla el acceso de cada usuario a módulos específicos.
-                            Los cambios se aplican inmediatamente pero requieren que el usuario vuelva a iniciar sesión.
+                            Controla el acceso de cada usuario a modulos especificos.
+                            Los cambios se aplican inmediatamente pero requieren que el usuario vuelva a iniciar sesion.
                           </p>
                         </div>
                       </div>
@@ -645,7 +865,7 @@ export default function Configuracion() {
                                   Cartera (Lectura)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Ver información de cartera y aportes
+                                  Ver informacion de cartera y aportes
                                 </p>
                               </div>
                             </div>
@@ -695,7 +915,7 @@ export default function Configuracion() {
                                   Benefactores (Lectura)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Ver información de benefactores
+                                  Ver informacion de benefactores
                                 </p>
                               </div>
                             </div>
@@ -745,7 +965,7 @@ export default function Configuracion() {
                                   Social (Lectura)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Ver información del módulo social
+                                  Ver informacion del modulo social
                                 </p>
                               </div>
                             </div>
@@ -770,7 +990,7 @@ export default function Configuracion() {
                                   Social (Escritura)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Editar información del módulo social
+                                  Editar informacion del modulo social
                                 </p>
                               </div>
                             </div>
@@ -795,7 +1015,7 @@ export default function Configuracion() {
                                   Configuraciones
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Acceso completo al módulo de configuración
+                                  Acceso completo al modulo de configuracion
                                 </p>
                               </div>
                             </div>
@@ -895,16 +1115,31 @@ export default function Configuracion() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="nuevo-cargo" className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Cargo
+                    </Label>
+                    <Input
+                      id="nuevo-cargo"
+                      value={nuevoCargo}
+                      onChange={(e) => setNuevoCargo(e.target.value.toUpperCase())}
+                      placeholder="AGENTE"
+                      maxLength={100}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="nuevo-password" className="flex items-center gap-2">
                       <Lock className="h-4 w-4" />
-                      Contraseña
+                      Contrasena
                     </Label>
                     <Input
                       id="nuevo-password"
                       type="password"
                       value={nuevoPassword}
                       onChange={(e) => setNuevoPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Minimo 6 caracteres"
                       required
                     />
                   </div>
@@ -912,14 +1147,14 @@ export default function Configuracion() {
                   <div className="space-y-2">
                     <Label htmlFor="nuevo-password-confirmar" className="flex items-center gap-2">
                       <Lock className="h-4 w-4" />
-                      Confirmar contraseña
+                      Confirmar contrasena
                     </Label>
                     <Input
                       id="nuevo-password-confirmar"
                       type="password"
                       value={nuevoPasswordConfirmar}
                       onChange={(e) => setNuevoPasswordConfirmar(e.target.value)}
-                      placeholder="Repite la contraseña"
+                      placeholder="Repite la contrasena"
                       required
                     />
                   </div>
@@ -947,7 +1182,7 @@ export default function Configuracion() {
                     <div>
                       <h4 className="font-semibold text-blue-900 mb-1">Siguiente paso</h4>
                       <p className="text-sm text-blue-800">
-                        Después de crear el usuario, asígnale roles en la pestaña “Administrar Roles”.
+                        Despues de crear el usuario, asignale roles en la pestana SAdministrar Rolesâ¬.
                       </p>
                     </div>
                   </div>
@@ -957,20 +1192,29 @@ export default function Configuracion() {
           </TabsContent>
         )}
 
-        {/* Usuarios Tab - Solo para administradores (solo lectura) */}
+        {/* Usuarios Tab - Solo para administradores */}
         {puedeConfigurar && (
           <TabsContent value="usuarios" className="mt-6">
             <Card className="bg-white border-gray-200">
               <CardHeader>
-                <CardTitle className="text-gray-900 flex items-center justify-between gap-2">
+                <CardTitle className="text-gray-900 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Usuarios y Roles
+                    Gestion de Usuarios
                   </div>
-                  <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios} className="gap-2">
-                    <RefreshCw className={`h-4 w-4 ${loadingUsuarios ? 'animate-spin' : ''}`} />
-                    {loadingUsuarios ? "Actualizando..." : "Actualizar"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={incluirInactivos ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setIncluirInactivos((prev) => !prev)}
+                    >
+                      {incluirInactivos ? "Mostrando inactivos" : "Ocultando inactivos"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={cargarUsuarios} disabled={loadingUsuarios} className="gap-2">
+                      <RefreshCw className={`h-4 w-4 ${loadingUsuarios ? 'animate-spin' : ''}`} />
+                      {loadingUsuarios ? "Actualizando..." : "Actualizar"}
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -987,34 +1231,54 @@ export default function Configuracion() {
                     {usuarios.map((usuario) => (
                       <div
                         key={usuario.id_usuario}
-                        className="p-4 border border-gray-200 rounded-lg flex flex-col sm:flex-row items-start sm:justify-between gap-4"
+                        className="p-4 border border-gray-200 rounded-lg flex flex-col gap-4"
                       >
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{usuario.nombre_usuario}</h3>
-                          <p className="text-sm text-gray-600">
-                            {usuario.permisos ? 'Permisos asignados' : 'Sin permisos'}
-                          </p>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{usuario.nombre_usuario}</h3>
+                            <p className="text-sm text-gray-600">
+                              Cargo: {(usuario.cargo || "AGENTE").toUpperCase()}
+                            </p>
+                          </div>
+                          <div>
+                            {usuario.activo !== false ? (
+                              <span className="px-3 py-1 text-xs rounded-full bg-green-100 text-green-800">ACTIVO</span>
+                            ) : (
+                              <span className="px-3 py-1 text-xs rounded-full bg-red-100 text-red-800">INACTIVO</span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 sm:justify-end w-full sm:w-auto">
-                          {usuario.permisos ? (
-                            Object.entries(usuario.permisos)
-                              .filter(([_, value]) => value === true)
-                              .map(([key]) => (
-                                <div
-                                  key={`${usuario.id_usuario}-${key}`}
-                                  className="px-3 py-2 bg-[#0F8F5B] text-white rounded-lg text-sm font-medium flex items-center gap-2"
-                                >
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                </div>
-                              ))
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" className="gap-2" onClick={() => handleEditarUsuarioAdmin(usuario)}>
+                            <Pencil className="h-4 w-4" />
+                            Editar
+                          </Button>
+                          <Button variant="outline" size="sm" className="gap-2" onClick={() => handleResetPasswordAdmin(usuario)}>
+                            <Lock className="h-4 w-4" />
+                            Reset password
+                          </Button>
+                          {usuario.activo !== false ? (
+                            <Button variant="outline" size="sm" className="gap-2 text-orange-700" onClick={() => handleCambiarEstadoUsuario(usuario, false)}>
+                              <XCircle className="h-4 w-4" />
+                              Inactivar
+                            </Button>
                           ) : (
-                            <div className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2">
-                              <XCircle className="h-3 w-3" />
-                              Sin permisos
-                            </div>
+                            <Button variant="outline" size="sm" className="gap-2 text-green-700" onClick={() => handleCambiarEstadoUsuario(usuario, true)}>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Reactivar
+                            </Button>
                           )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleEliminarUsuarioSoft(usuario)}
+                            disabled={usuario.activo === false}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Eliminar (soft)
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -1029,13 +1293,13 @@ export default function Configuracion() {
         {puedeConfigurar && (
           <TabsContent value="sucursales" className="mt-6">
             <div className="space-y-6">
-              {/* Card para gestión de sucursales */}
+              {/* Card para gestion de sucursales */}
               <Card className="bg-white border-gray-200">
                 <CardHeader>
                   <CardTitle className="text-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-5 w-5" />
-                      Gestión de Sucursales
+                      Gestion de Sucursales
                     </div>
                     <Button
                       onClick={() => setOpenCrearSucursal(true)}
@@ -1114,7 +1378,7 @@ export default function Configuracion() {
                         </Table>
                       </div>
 
-                      {/* Vista móvil - Cards */}
+                      {/* Vista movil - Cards */}
                       <div className="md:hidden space-y-4">
                         {sucursales.map((sucursal) => (
                           <Card key={sucursal.id_sucursal} className="border-2">
@@ -1240,7 +1504,7 @@ export default function Configuracion() {
                         </Table>
                       </div>
 
-                      {/* Vista móvil - Cards */}
+                      {/* Vista movil - Cards */}
                       <div className="md:hidden space-y-4">
                         {usuarios.map((usuario) => (
                           <Card key={usuario.id_usuario} className="border-2">
@@ -1290,7 +1554,7 @@ export default function Configuracion() {
                 <DialogHeader>
                   <DialogTitle>Crear Nueva Sucursal</DialogTitle>
                   <DialogDescription>
-                    Ingresa los datos de la nueva sucursal. Las iniciales deben ser únicas.
+                    Ingresa los datos de la nueva sucursal. Las iniciales deben ser unicas.
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCrearSucursal}>
@@ -1485,6 +1749,113 @@ export default function Configuracion() {
           </TabsContent>
         )}
 
+        {/* Apariencia Tab */}
+        {puedeConfigurar && (
+          <TabsContent value="apariencia" className="mt-6">
+            <div className="space-y-6">
+              <Card className="border-0 shadow-lg overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-[#0f5f96] to-[#2d8cc4] text-white">
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Apariencia de login
+                  </CardTitle>
+                  <p className="text-sm text-white/90">
+                    Administra logo y carrusel con vista previa en tiempo real.
+                  </p>
+                </CardHeader>
+                <CardContent className="p-6 bg-white">
+                  <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-gray-800">Logo institucional</p>
+                      <div className="rounded-xl border border-slate-200 shadow-sm p-3 bg-[linear-gradient(45deg,#eef2f7_25%,#ffffff_25%,#ffffff_50%,#eef2f7_50%,#eef2f7_75%,#ffffff_75%,#ffffff_100%)] bg-[length:20px_20px]">
+                        <div className="h-32 rounded-lg bg-slate-900/85 flex items-center justify-center overflow-hidden">
+                          <img
+                            src={logoPreview || aparienciaService.resolverUrl(apariencia?.logo?.url) || DEFAULT_LOGIN_LOGO}
+                            alt="Preview logo"
+                            className="max-h-full max-w-full object-contain p-3 drop-shadow-[0_8px_20px_rgba(255,255,255,0.25)]"
+                          />
+                        </div>
+                      </div>
+                      <Input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={seleccionarLogo} />
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" onClick={guardarLogo} disabled={!logoArchivo || guardandoApariencia} className="gap-2">
+                          <Upload className="h-4 w-4" />
+                          Guardar logo
+                        </Button>
+                        <Button type="button" variant="outline" onClick={eliminarLogoApariencia} disabled={!apariencia?.logo?.filename || guardandoApariencia}>
+                          Eliminar
+                        </Button>
+                        <Button type="button" variant="outline" onClick={cargarApariencia} disabled={cargandoApariencia}>
+                          {cargandoApariencia ? "Actualizando..." : "Recargar"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-gray-800">Carrusel del login</p>
+                        <Button type="button" variant="outline" className="gap-2" onClick={agregarSlotCarrusel}>
+                          <Plus className="h-4 w-4" />
+                          Agregar imagen
+                        </Button>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Puedes agregar todas las imagenes que necesites. Se muestran en el orden listado.
+                      </p>
+                      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+                        {Array.from({
+                          length: Math.max(
+                            carruselArchivos.length,
+                            apariencia?.carousel?.length || 0,
+                            (apariencia?.carousel?.length || 0) === 0 ? DEFAULT_LOGIN_CAROUSEL.length : 0
+                          )
+                        }, (_, index) => {
+                          const urlRemota = aparienciaService.resolverUrl(apariencia?.carousel?.[index]?.url);
+                          const urlBase = urlRemota || ((apariencia?.carousel?.length || 0) === 0 ? DEFAULT_LOGIN_CAROUSEL[index] : null);
+                          const preview = carruselPreviews[index] || urlBase;
+                          const tieneArchivoLocal = Boolean(carruselArchivos[index]);
+                          const tieneRemota = Boolean(apariencia?.carousel?.[index]?.filename);
+                          const puedeEliminar = tieneRemota || tieneArchivoLocal;
+
+                          return (
+                            <Card key={index} className="overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                              <CardContent className="p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="font-semibold text-sm text-slate-800">Slide {index + 1}</p>
+                                  {!tieneRemota && !tieneArchivoLocal && (apariencia?.carousel?.length || 0) === 0 && DEFAULT_LOGIN_CAROUSEL[index] && (
+                                    <span className="text-[11px] px-2 py-1 rounded bg-sky-100 text-sky-800">Predeterminada</span>
+                                  )}
+                                </div>
+                                <div className="h-36 rounded-lg overflow-hidden bg-slate-100 border">
+                                  {preview ? (
+                                    <img src={preview} alt={`Preview carrusel ${index + 1}`} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">Sin imagen</div>
+                                  )}
+                                </div>
+                                <Input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={(event) => seleccionarCarrusel(index, event)} />
+                                <div className="flex gap-2">
+                                  <Button type="button" size="sm" onClick={() => guardarImagenCarrusel(index)} disabled={!tieneArchivoLocal || guardandoApariencia} className="gap-2">
+                                    <Upload className="h-4 w-4" />
+                                    Guardar
+                                  </Button>
+                                  <Button type="button" size="sm" variant="outline" onClick={() => eliminarImagenCarrusel(index)} disabled={!puedeEliminar || guardandoApariencia}>
+                                    Eliminar
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
+
         {/* Bancos Tab */}
         {puedeConfigurar && (
           <TabsContent value="bancos" className="mt-6">
@@ -1495,3 +1866,9 @@ export default function Configuracion() {
     </div>
   );
 }
+
+
+
+
+
+

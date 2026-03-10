@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -6,16 +6,12 @@ import { Label } from "./ui/label";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import { User, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { aparienciaService } from "../services/apariencia.service";
+import { DEFAULT_LOGIN_CAROUSEL, DEFAULT_LOGIN_LOGO } from "../config/aparienciaDefaults";
 
-// Imágenes
-import logo from "../assets/img/FUNDACASDION.png";
-import img1 from "../assets/img/1 - copia.jpg";
-import img2 from "../assets/img/2.jpg";
-import img3 from "../assets/img/3.jpg";
-import img5 from "../assets/img/5.jpg";
-import img6 from "../assets/img/6.jpg";
-
-const galleryImages = [img1, img2, img3, img5, img6];
+// Imagenes
+const logoDefault = DEFAULT_LOGIN_LOGO;
+const defaultGalleryImages = DEFAULT_LOGIN_CAROUSEL;
 
 export default function Login() {
   const navigate = useNavigate();
@@ -26,24 +22,53 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [logoUrl, setLogoUrl] = useState<string>(logoDefault);
+  const [galleryImages, setGalleryImages] = useState<string[]>(defaultGalleryImages);
 
   useEffect(() => {
     if (user && !loading) navigate("/");
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    const cargarApariencia = async () => {
+      try {
+        const response = await aparienciaService.obtenerPublica();
+
+        const logoRemoto = aparienciaService.resolverUrl(response.data?.logo?.url);
+        if (logoRemoto) {
+          setLogoUrl(logoRemoto);
+        }
+
+        const carruselRemoto = (response.data?.carousel_urls || [])
+          .map((url) => aparienciaService.resolverUrl(url))
+          .filter((url): url is string => Boolean(url));
+
+        if (carruselRemoto.length > 0) {
+          setGalleryImages(carruselRemoto);
+        }
+      } catch {
+        // Usar fallback local
+      }
+    };
+
+    cargarApariencia();
+  }, []);
+
   // Carrusel de fondo
   useEffect(() => {
+    if (!galleryImages.length) return;
+    setCurrentImageIndex(0);
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % galleryImages.length);
     }, 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [galleryImages]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!nombreUsuario || !password) {
-      toast.error("Por favor ingrese usuario y contraseña");
+      toast.error("Por favor ingrese usuario y contrasena");
       return;
     }
 
@@ -87,8 +112,9 @@ export default function Login() {
       <div className="relative z-20 min-h-screen flex flex-col items-center justify-center px-4">
         {/* Logo */}
         <img
-          src={logo}
-          alt="Logo Fundación FPUS"
+          src={logoUrl}
+          onError={() => setLogoUrl(logoDefault)}
+          alt="Logo Fundacion FPUS"
           className="
             h-24 mb-8 drop-shadow-2xl
             transition-all duration-300
@@ -111,7 +137,7 @@ export default function Login() {
         >
           <div className="mb-8 text-center">
             <h2 className="text-3xl font-bold text-[#1b76b9] mb-2">
-              Iniciar Sesión
+              Iniciar Sesion
             </h2>
             <p className="text-gray-600">
               Ingresa tus credenciales para continuar
@@ -134,9 +160,9 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Contraseña con OJO */}
+            {/* Contrasena con OJO */}
             <div className="space-y-2">
-              <Label className="text-gray-700 text-sm font-medium">Contraseña</Label>
+              <Label className="text-gray-700 text-sm font-medium">Contrasena</Label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
 
@@ -144,12 +170,12 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   disabled={submitting}
                   className="h-14 pl-12 pr-12 rounded-xl border-2 focus:border-[#1b76b9]"
                 />
 
-                {/* Botón ojo */}
+                {/* Boton ojo */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -158,7 +184,7 @@ export default function Login() {
                     text-gray-400 hover:text-[#1b76b9]
                     transition-colors
                   "
-                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -169,7 +195,7 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Botón */}
+            {/* Boton */}
             <Button
               type="submit"
               disabled={submitting}
@@ -183,11 +209,11 @@ export default function Login() {
               {submitting ? (
                 <div className="flex gap-2 items-center text-white">
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Iniciando sesión...
+                  Iniciando sesion...
                 </div>
               ) : (
                 <div className="flex gap-2 items-center text-white">
-                  Iniciar sesión
+                  Iniciar sesion
                   <ArrowRight className="w-5 h-5" />
                 </div>
               )}
@@ -195,12 +221,12 @@ export default function Login() {
           </form>
 
           <div className="mt-8 pt-6 border-t text-center text-sm text-gray-500">
-            Sistema de Gestión de Benefactores
+            Sistema de Gestion de Benefactores
           </div>
         </div>
 
         <p className="text-white/80 text-sm mt-6 text-center">
-          © 2026 Fundación FPUS. Todos los derechos reservados.
+          (c) 2026 Fundacion FPUS. Todos los derechos reservados.
         </p>
       </div>
 
@@ -215,3 +241,5 @@ export default function Login() {
     </div>
   );
 }
+
+

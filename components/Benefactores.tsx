@@ -147,6 +147,7 @@ export default function Benefactores() {
   const [numCuentaTc, setNumCuentaTc] = useState("");
   const [tipoCuenta, setTipoCuenta] = useState("");
   const [bancoEmisor, setBancoEmisor] = useState("");
+  const [corporacion, setCorporacion] = useState("");
   const [observacion, setObservacion] = useState("");
 
   const [guardando, setGuardando] = useState(false);
@@ -293,6 +294,7 @@ export default function Benefactores() {
     setNumCuentaTc("");
     setTipoCuenta("");
     setBancoEmisor("");
+    setCorporacion("");
     setObservacion("");
     setTipoBenefactor("TITULAR");
     setTipoAfiliacion("individual");
@@ -334,6 +336,11 @@ export default function Benefactores() {
       return;
     }
 
+    if (tipoAfiliacion === "corporativo" && !corporacion.trim()) {
+      toast.error("La corporación es obligatoria para afiliación corporativa");
+      return;
+    }
+
     // ✅ Contrato obligatorio
     if (!contratoFile) {
       setContratoError("Debe subir el contrato PDF (obligatorio)");
@@ -360,6 +367,7 @@ export default function Benefactores() {
         n_convenio: convenioSugerido || undefined,
         mes_prod: mesProduccion || undefined,
         tipo_afiliacion: tipoAfiliacion,
+        corporacion: tipoAfiliacion === "corporativo" ? corporacion.trim() : undefined,
         cuenta: tipoAfiliacion === "individual" ? (cuentaBancaria.trim() || undefined) : undefined,
         num_cuenta_tc: tipoAfiliacion === "individual" ? (numCuentaTc.trim() || undefined) : undefined,
         tipo_cuenta: tipoAfiliacion === "individual" ? (tipoCuenta || undefined) : undefined,
@@ -775,7 +783,12 @@ export default function Benefactores() {
                   <Label htmlFor="tipoAfiliacion">Tipo de Afiliación</Label>
                   <Select
                     value={tipoAfiliacion}
-                    onValueChange={setTipoAfiliacion}
+                    onValueChange={(value) => {
+                      setTipoAfiliacion(value);
+                      if (value === "individual") {
+                        setCorporacion("");
+                      }
+                    }}
                     disabled={guardando || subiendoContrato}
                   >
                     <SelectTrigger id="tipoAfiliacion">
@@ -850,6 +863,19 @@ export default function Benefactores() {
                       </div>
                     </div>
                   </>
+                )}
+
+                {tipoAfiliacion === "corporativo" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="corporacion">Corporación</Label>
+                    <Input
+                      id="corporacion"
+                      placeholder="Ingrese nombre de la corporación"
+                      value={corporacion}
+                      onChange={(e) => setCorporacion(e.target.value.toUpperCase())}
+                      disabled={guardando || subiendoContrato}
+                    />
+                  </div>
                 )}
 
                 <div className="grid grid-cols-3 gap-4">
