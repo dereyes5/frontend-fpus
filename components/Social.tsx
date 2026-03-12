@@ -620,13 +620,13 @@ export default function Social() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Nacionalidad</Label>
-                        <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                        <Popover open={countryOpen} onOpenChange={setCountryOpen} modal>
                           <PopoverTrigger asChild>
-                            <Button variant="outline" className="w-full justify-start text-left font-normal">
+                            <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
                               {nuevoCaso.nacionalidad || "Seleccione pais"}
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="p-0 w-[320px]">
+                          <PopoverContent className="p-0 w-[320px]" align="start">
                             <Command>
                               <CommandInput placeholder="Buscar pais..." />
                               <CommandList>
@@ -636,6 +636,7 @@ export default function Social() {
                                     <CommandItem
                                       key={country.code}
                                       value={country.name}
+                                      onMouseDown={(e) => e.preventDefault()}
                                       onSelect={() => {
                                         handleFormValue("nacionalidad", country.name);
                                         handleFormValue("pais", country.name);
