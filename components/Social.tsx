@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Search, AlertCircle, Clock } from "lucide-react";
+import { MapContainer, TileLayer, CircleMarker, useMapEvents } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -11,6 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Separator } from "./ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { useAuth } from "../contexts/AuthContext";
 import { ProtectedAction } from "./ProtectedAction";
 import socialService from "../services/social.service";
@@ -72,6 +77,148 @@ function normalizeUpperAsciiText(value: string) {
     .replace(/\s+/g, " ");
 }
 
+function validarCedulaEcuador(cedula: string): boolean {
+  if (!/^\d{10}$/.test(cedula)) return false;
+  const provincia = Number.parseInt(cedula.slice(0, 2), 10);
+  if (provincia < 1 || provincia > 24) return false;
+  const tercerDigito = Number.parseInt(cedula[2], 10);
+  if (tercerDigito >= 6) return false;
+
+  const digitos = cedula.split("").map((d) => Number.parseInt(d, 10));
+  const verificador = digitos[9];
+
+  let suma = 0;
+  for (let i = 0; i < 9; i++) {
+    const coef = i % 2 === 0 ? 2 : 1;
+    let prod = digitos[i] * coef;
+    if (prod >= 10) prod -= 9;
+    suma += prod;
+  }
+
+  const digitoCalculado = (10 - (suma % 10)) % 10;
+  return digitoCalculado === verificador;
+}
+
+const TABS_CASO = [
+  "informacion_personal",
+  "familiar_convivencia",
+  "vivienda",
+  "salud",
+  "nutricion",
+  "recursos",
+  "red_apoyo",
+  "coordenadas",
+  "levantamiento",
+] as const;
+
+type TabCaso = typeof TABS_CASO[number];
+
+const INITIAL_RELACIONES = [
+  { nombre_familiar: "", forma_convivencia: "OCASIONAL", edad: "", cedula: "", telefono: "" },
+  { nombre_familiar: "", forma_convivencia: "OCASIONAL", edad: "", cedula: "", telefono: "" },
+  { nombre_familiar: "", forma_convivencia: "OCASIONAL", edad: "", cedula: "", telefono: "" },
+];
+
+const initialCasoForm = () => ({
+  tipo_caso: "Otro",
+  prioridad: "Media",
+  nombres: "",
+  apellidos: "",
+  sexo: "",
+  edad: "",
+  cedula: "",
+  nacionalidad: "",
+  estado_civil: "",
+  tipo_sangre: "",
+  direccion: "",
+  fecha_nacimiento: "",
+  ciudad: "",
+  provincia: "",
+  pais: "ECUADOR",
+  telefono: "",
+  referencia: "",
+  discapacidad: "NO",
+  discapacidad_detalle: "",
+  con_quien_vive: "",
+  con_quien_vive_detalle: "",
+  relaciones_familiares: INITIAL_RELACIONES,
+  vivienda_reside: "",
+  vivienda_barreras: "",
+  vivienda_estado: "",
+  vivienda_paredes: "",
+  vivienda_piso: "",
+  vivienda_techo: "",
+  vivienda_servicios: "",
+  salud_estado_general: "",
+  enfermedad_catastrofica: "NO",
+  toma_medicacion_constante: "NO",
+  alergia_medicamentos: "NO",
+  alergia_medicamentos_detalle: "",
+  nutricion_num_comidas: "",
+  nutricion_desayuno: "NO",
+  nutricion_almuerzo: "NO",
+  nutricion_merienda: "NO",
+  nutricion_consume_frutas: "NO",
+  recibe_pension: "NO",
+  pension_monto: "",
+  pension_tipo: "",
+  pension_indique_cual: "",
+  pension_quien_cobra_1: "",
+  pension_quien_cobra_2: "",
+  pension_quien_cobra_3: "",
+  red_actividades: "NO",
+  red_actividades_cuales: "",
+  red_sale_domicilio: "NO",
+  red_sale_donde: "",
+  red_pertenece_org: "NO",
+  red_nombre_org: "",
+  red_actividad_org: "",
+  red_info_fuentes: "",
+  red_habla_con_quien: "",
+  latitud: "",
+  longitud: "",
+  se_siente_acompanado: "NO",
+  perdida_familiar_reciente: "NO",
+  perdida_familiar_detalle: "",
+  observaciones_conclusiones: "",
+  fecha_generacion_ficha: new Date().toISOString().slice(0, 10),
+});
+
+function MapaSelector({
+  lat,
+  lng,
+  onSelect,
+}: {
+  lat: number;
+  lng: number;
+  onSelect: (latitud: number, longitud: number) => void;
+}) {
+  const MapClickHandler = () => {
+    useMapEvents({
+      click: (e) => {
+        onSelect(e.latlng.lat, e.latlng.lng);
+      },
+    });
+    return null;
+  };
+
+  return (
+    <MapContainer
+      center={[lat, lng]}
+      zoom={13}
+      scrollWheelZoom
+      style={{ height: "320px", width: "100%", borderRadius: "0.75rem" }}
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      <CircleMarker center={[lat, lng]} radius={8} pathOptions={{ color: "#1b76b9", fillColor: "#1b76b9", fillOpacity: 0.7 }} />
+      <MapClickHandler />
+    </MapContainer>
+  );
+}
+
 export default function Social() {
   const navigate = useNavigate();
   const { permisos } = useAuth();
@@ -89,17 +236,25 @@ export default function Social() {
   const [historial, setHistorial] = useState<HistorialItemUI[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [savingCaso, setSavingCaso] = useState(false);
-  const [nuevoCaso, setNuevoCaso] = useState({
-    nombre_completo: "",
-    tipo_caso: "",
-    prioridad: "",
-    descripcion_caso: "",
-    ciudad: "",
-    telefono: "",
-    email: "",
-    direccion: "",
-    provincia: "",
-  });
+  const [nuevoCaso, setNuevoCaso] = useState(initialCasoForm());
+  const [tabCaso, setTabCaso] = useState<TabCaso>("informacion_personal");
+  const [fichaPdf, setFichaPdf] = useState<File | null>(null);
+  const [firmaImagen, setFirmaImagen] = useState<File | null>(null);
+  const [countryOpen, setCountryOpen] = useState(false);
+
+  const countryOptions = useState(() => {
+    const regionCodes: string[] = typeof (Intl as any).supportedValuesOf === "function"
+      ? (Intl as any).supportedValuesOf("region")
+      : ["EC", "CO", "PE", "CL", "AR", "UY", "PY", "BO", "MX", "US", "ES", "IT", "FR", "DE"];
+    const regionNames = new Intl.DisplayNames(["es"], { type: "region" });
+    return regionCodes
+      .map((code) => ({
+        code,
+        name: normalizeUpperAsciiText(regionNames.of(code) || code),
+      }))
+      .filter((item) => item.name && item.name.length > 1)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })[0];
 
   const formatearFecha = (fecha?: string) => {
     if (!fecha) return "-";
@@ -167,38 +322,147 @@ export default function Social() {
     cargarHistorial();
   }, [showHistorial, selectedCaso]);
 
-  const handleCrearCaso = async () => {
-    if (!nuevoCaso.nombre_completo || !nuevoCaso.tipo_caso || !nuevoCaso.prioridad || !nuevoCaso.descripcion_caso) {
-      toast.error("Completa los campos obligatorios");
+  const handleFormValue = (field: string, value: string) => {
+    setNuevoCaso((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUpperFormValue = (field: string, value: string) => {
+    handleFormValue(field, normalizeUpperAsciiText(value));
+  };
+
+  const updateRelacion = (idx: number, field: string, value: string) => {
+    setNuevoCaso((prev: any) => {
+      const relaciones = [...prev.relaciones_familiares];
+      relaciones[idx] = {
+        ...relaciones[idx],
+        [field]: field === "forma_convivencia" ? value : normalizeUpperAsciiText(value),
+      };
+      return { ...prev, relaciones_familiares: relaciones };
+    });
+  };
+
+  const handleCapturarUbicacion = () => {
+    if (!navigator.geolocation) {
+      toast.error("El navegador no soporta geolocalizacion");
       return;
     }
 
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setNuevoCaso((prev: any) => ({
+          ...prev,
+          latitud: String(position.coords.latitude.toFixed(7)),
+          longitud: String(position.coords.longitude.toFixed(7)),
+        }));
+      },
+      () => {
+        toast.error("No fue posible obtener la ubicacion");
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleCrearCaso = async () => {
+    if (!nuevoCaso.nombres || !nuevoCaso.apellidos || !nuevoCaso.sexo || !nuevoCaso.cedula) {
+      toast.error("Completa los datos obligatorios de informacion personal");
+      setTabCaso("informacion_personal");
+      return;
+    }
+
+    if (!validarCedulaEcuador(nuevoCaso.cedula)) {
+      toast.error("La cedula ingresada no es valida");
+      setTabCaso("informacion_personal");
+      return;
+    }
+
+    if (!fichaPdf) {
+      toast.error("Debes adjuntar el PDF de ficha social");
+      setTabCaso("levantamiento");
+      return;
+    }
+
+    const payload = {
+      tipo_caso: normalizeTipoCaso(nuevoCaso.tipo_caso || "Otro"),
+      prioridad: (nuevoCaso.prioridad || "Media") as BeneficiarioSocial["prioridad"],
+      nombres: nuevoCaso.nombres,
+      apellidos: nuevoCaso.apellidos,
+      sexo: nuevoCaso.sexo,
+      edad: nuevoCaso.edad ? Number(nuevoCaso.edad) : undefined,
+      cedula: nuevoCaso.cedula,
+      nacionalidad: nuevoCaso.nacionalidad || undefined,
+      estado_civil: nuevoCaso.estado_civil || undefined,
+      tipo_sangre: nuevoCaso.tipo_sangre || undefined,
+      direccion: nuevoCaso.direccion || undefined,
+      fecha_nacimiento: nuevoCaso.fecha_nacimiento || undefined,
+      ciudad: nuevoCaso.ciudad || undefined,
+      provincia: nuevoCaso.provincia || undefined,
+      pais: nuevoCaso.pais || undefined,
+      telefono: nuevoCaso.telefono || undefined,
+      referencia: nuevoCaso.referencia || undefined,
+      discapacidad: nuevoCaso.discapacidad === "SI",
+      discapacidad_detalle: nuevoCaso.discapacidad === "SI" ? (nuevoCaso.discapacidad_detalle || undefined) : undefined,
+      con_quien_vive: nuevoCaso.con_quien_vive || undefined,
+      con_quien_vive_detalle: nuevoCaso.con_quien_vive_detalle || undefined,
+      relaciones_familiares: nuevoCaso.relaciones_familiares.filter((r: any) => r.nombre_familiar?.trim().length > 0),
+      situacion_vivienda: {
+        vivienda_reside: nuevoCaso.vivienda_reside,
+        barreras: nuevoCaso.vivienda_barreras,
+        estado: nuevoCaso.vivienda_estado,
+        paredes: nuevoCaso.vivienda_paredes,
+        piso: nuevoCaso.vivienda_piso,
+        techo: nuevoCaso.vivienda_techo,
+        servicios: nuevoCaso.vivienda_servicios,
+      },
+      salud_estado_general: nuevoCaso.salud_estado_general || undefined,
+      enfermedad_catastrofica: nuevoCaso.enfermedad_catastrofica === "SI",
+      toma_medicacion_constante: nuevoCaso.toma_medicacion_constante === "SI",
+      alergia_medicamentos: nuevoCaso.alergia_medicamentos === "SI",
+      alergia_medicamentos_detalle: nuevoCaso.alergia_medicamentos === "SI" ? (nuevoCaso.alergia_medicamentos_detalle || undefined) : undefined,
+      nutricion_num_comidas: nuevoCaso.nutricion_num_comidas ? Number(nuevoCaso.nutricion_num_comidas) : undefined,
+      nutricion_desayuno: nuevoCaso.nutricion_desayuno === "SI",
+      nutricion_almuerzo: nuevoCaso.nutricion_almuerzo === "SI",
+      nutricion_merienda: nuevoCaso.nutricion_merienda === "SI",
+      nutricion_consume_frutas: nuevoCaso.nutricion_consume_frutas === "SI",
+      recursos_economicos: {
+        recibe_pension: nuevoCaso.recibe_pension === "SI",
+        monto: nuevoCaso.pension_monto || undefined,
+        tipo_pension: nuevoCaso.pension_tipo || undefined,
+        indique_cual: nuevoCaso.pension_indique_cual || undefined,
+        quien_cobra: [nuevoCaso.pension_quien_cobra_1, nuevoCaso.pension_quien_cobra_2, nuevoCaso.pension_quien_cobra_3].filter(Boolean),
+      },
+      red_social_apoyo: {
+        actividades_tiempo_libre: nuevoCaso.red_actividades === "SI",
+        cuales_actividades: nuevoCaso.red_actividades_cuales || undefined,
+        sale_domicilio: nuevoCaso.red_sale_domicilio === "SI",
+        donde_sale: nuevoCaso.red_sale_donde || undefined,
+        pertenece_organizacion: nuevoCaso.red_pertenece_org === "SI",
+        nombre_organizacion: nuevoCaso.red_nombre_org || undefined,
+        actividad_organizacion: nuevoCaso.red_actividad_org || undefined,
+        info_fuentes: nuevoCaso.red_info_fuentes || undefined,
+        habla_con_quien: nuevoCaso.red_habla_con_quien || undefined,
+      },
+      latitud: nuevoCaso.latitud ? Number(nuevoCaso.latitud) : undefined,
+      longitud: nuevoCaso.longitud ? Number(nuevoCaso.longitud) : undefined,
+      se_siente_acompanado: nuevoCaso.se_siente_acompanado === "SI",
+      perdida_familiar_reciente: nuevoCaso.perdida_familiar_reciente === "SI",
+      perdida_familiar_detalle: nuevoCaso.perdida_familiar_reciente === "SI" ? (nuevoCaso.perdida_familiar_detalle || undefined) : undefined,
+      observaciones_conclusiones: nuevoCaso.observaciones_conclusiones || undefined,
+      fecha_generacion_ficha: nuevoCaso.fecha_generacion_ficha || undefined,
+      descripcion_caso: "FICHA SOCIAL ADULTO MAYOR",
+    };
+
     try {
       setSavingCaso(true);
-      await socialService.crearCasoSocial({
-        nombre_completo: normalizeUpperAsciiText(nuevoCaso.nombre_completo).trim(),
-        tipo_caso: normalizeTipoCaso(nuevoCaso.tipo_caso),
-        prioridad: nuevoCaso.prioridad as BeneficiarioSocial["prioridad"],
-        descripcion_caso: nuevoCaso.descripcion_caso,
-        ciudad: nuevoCaso.ciudad || undefined,
-        telefono: nuevoCaso.telefono || undefined,
-        email: nuevoCaso.email || undefined,
-        direccion: nuevoCaso.direccion || undefined,
-        provincia: nuevoCaso.provincia || undefined,
+      await socialService.crearCasoSocial(payload, {
+        fichaPdf,
+        firma: firmaImagen,
       });
       toast.success("Caso social registrado");
       setIsDialogOpen(false);
-      setNuevoCaso({
-        nombre_completo: "",
-        tipo_caso: "",
-        prioridad: "",
-        descripcion_caso: "",
-        ciudad: "",
-        telefono: "",
-        email: "",
-        direccion: "",
-        provincia: "",
-      });
+      setNuevoCaso(initialCasoForm());
+      setTabCaso("informacion_personal");
+      setFichaPdf(null);
+      setFirmaImagen(null);
       await cargarCasos();
     } catch (error: any) {
       const msg = error?.response?.data?.error || error?.response?.data?.message || "Error al registrar caso social";
@@ -266,82 +530,407 @@ export default function Social() {
                   Registrar caso social
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[700px]">
+              <DialogContent className="sm:max-w-[1100px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Registrar Nuevo Caso Social</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                <Tabs value={tabCaso} onValueChange={(v) => setTabCaso(v as TabCaso)} className="w-full">
+                  <TabsList className="grid grid-cols-3 lg:grid-cols-9 h-auto gap-1 bg-gray-100 p-1">
+                    <TabsTrigger value="informacion_personal">Personal</TabsTrigger>
+                    <TabsTrigger value="familiar_convivencia">Familiar</TabsTrigger>
+                    <TabsTrigger value="vivienda">Vivienda</TabsTrigger>
+                    <TabsTrigger value="salud">Salud</TabsTrigger>
+                    <TabsTrigger value="nutricion">Nutricion</TabsTrigger>
+                    <TabsTrigger value="recursos">Recursos</TabsTrigger>
+                    <TabsTrigger value="red_apoyo">Red apoyo</TabsTrigger>
+                    <TabsTrigger value="coordenadas">Coordenadas</TabsTrigger>
+                    <TabsTrigger value="levantamiento">Levantamiento</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="informacion_personal" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Nombres *</Label>
+                        <Input value={nuevoCaso.nombres} onChange={(e) => handleUpperFormValue("nombres", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Apellidos *</Label>
+                        <Input value={nuevoCaso.apellidos} onChange={(e) => handleUpperFormValue("apellidos", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Sexo *</Label>
+                        <Select value={nuevoCaso.sexo} onValueChange={(v) => handleFormValue("sexo", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="M">M</SelectItem>
+                            <SelectItem value="F">F</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>Edad</Label>
+                        <Input type="number" value={nuevoCaso.edad} onChange={(e) => handleFormValue("edad", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>N Cedula *</Label>
+                        <Input value={nuevoCaso.cedula} onChange={(e) => handleFormValue("cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Fecha de nacimiento</Label>
+                        <Input type="date" value={nuevoCaso.fecha_nacimiento} onChange={(e) => handleFormValue("fecha_nacimiento", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Tipo de sangre</Label>
+                        <Input value={nuevoCaso.tipo_sangre} onChange={(e) => handleUpperFormValue("tipo_sangre", e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Nacionalidad</Label>
+                        <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal">
+                              {nuevoCaso.nacionalidad || "Seleccione pais"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="p-0 w-[320px]">
+                            <Command>
+                              <CommandInput placeholder="Buscar pais..." />
+                              <CommandList>
+                                <CommandEmpty>Sin resultados</CommandEmpty>
+                                <CommandGroup>
+                                  {countryOptions.map((country: any) => (
+                                    <CommandItem
+                                      key={country.code}
+                                      value={country.name}
+                                      onSelect={() => {
+                                        handleFormValue("nacionalidad", country.name);
+                                        handleFormValue("pais", country.name);
+                                        setCountryOpen(false);
+                                      }}
+                                    >
+                                      {country.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado civil</Label>
+                        <Select value={nuevoCaso.estado_civil} onValueChange={(v) => handleFormValue("estado_civil", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SOLTERO">SOLTERO</SelectItem>
+                            <SelectItem value="CASADO">CASADO</SelectItem>
+                            <SelectItem value="DIVORCIADO">DIVORCIADO</SelectItem>
+                            <SelectItem value="VIUDO">VIUDO</SelectItem>
+                            <SelectItem value="UNION LIBRE">UNION LIBRE</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Pais</Label>
+                        <Input value={nuevoCaso.pais} onChange={(e) => handleUpperFormValue("pais", e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Direccion</Label>
+                        <Input value={nuevoCaso.direccion} onChange={(e) => handleUpperFormValue("direccion", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Referencia</Label>
+                        <Input value={nuevoCaso.referencia} onChange={(e) => handleUpperFormValue("referencia", e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ciudad</Label>
+                        <Input value={nuevoCaso.ciudad} onChange={(e) => handleUpperFormValue("ciudad", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Provincia</Label>
+                        <Input value={nuevoCaso.provincia} onChange={(e) => handleUpperFormValue("provincia", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Telefono</Label>
+                        <Input value={nuevoCaso.telefono} onChange={(e) => handleUpperFormValue("telefono", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Discapacidad</Label>
+                        <Select value={nuevoCaso.discapacidad} onValueChange={(v) => handleFormValue("discapacidad", v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SI">SI</SelectItem>
+                            <SelectItem value="NO">NO</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {nuevoCaso.discapacidad === "SI" && (
+                      <div className="space-y-2">
+                        <Label>Especifique discapacidad</Label>
+                        <Input value={nuevoCaso.discapacidad_detalle} onChange={(e) => handleUpperFormValue("discapacidad_detalle", e.target.value)} />
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="familiar_convivencia" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Con quien vive</Label>
+                        <Select value={nuevoCaso.con_quien_vive} onValueChange={(v) => handleFormValue("con_quien_vive", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SOLO">SOLO</SelectItem>
+                            <SelectItem value="CONYUGE/PAREJA">CONYUGE/PAREJA</SelectItem>
+                            <SelectItem value="FAMILIARES">FAMILIARES/QUIEN</SelectItem>
+                            <SelectItem value="OTROS">OTROS/QUIEN</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Detalle</Label>
+                        <Input value={nuevoCaso.con_quien_vive_detalle} onChange={(e) => handleUpperFormValue("con_quien_vive_detalle", e.target.value)} />
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label>Nombre completo *</Label>
-                      <Input
-                        value={nuevoCaso.nombre_completo}
-                        onChange={(e) =>
-                          setNuevoCaso((p) => ({
-                            ...p,
-                            nombre_completo: normalizeUpperAsciiText(e.target.value),
-                          }))
-                        }
+                      <Label>Relaciones familiares mas importantes (maximo 3)</Label>
+                      <div className="space-y-2">
+                        {nuevoCaso.relaciones_familiares.map((rel: any, idx: number) => (
+                          <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                            <Input placeholder="Nombre" value={rel.nombre_familiar} onChange={(e) => updateRelacion(idx, "nombre_familiar", e.target.value)} />
+                            <Select value={rel.forma_convivencia} onValueChange={(v) => updateRelacion(idx, "forma_convivencia", v)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="OCASIONAL">OCASIONAL</SelectItem>
+                                <SelectItem value="PERMANENTE">PERMANENTE</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input placeholder="Edad" type="number" value={rel.edad} onChange={(e) => updateRelacion(idx, "edad", e.target.value)} />
+                            <Input placeholder="Cedula" value={rel.cedula} onChange={(e) => updateRelacion(idx, "cedula", e.target.value.replace(/\D/g, "").slice(0, 10))} />
+                            <Input placeholder="Telefono" value={rel.telefono} onChange={(e) => updateRelacion(idx, "telefono", e.target.value)} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="vivienda" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Vivienda en la que reside</Label>
+                        <Select value={nuevoCaso.vivienda_reside} onValueChange={(v) => handleFormValue("vivienda_reside", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PROPIA">PROPIA</SelectItem>
+                            <SelectItem value="ALQUILADA">ALQUILADA</SelectItem>
+                            <SelectItem value="FAMILIAR">FAMILIAR</SelectItem>
+                            <SelectItem value="PRESTADA">PRESTADA</SelectItem>
+                            <SelectItem value="OTRO">OTRO</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Barreras arquitectonicas</Label>
+                        <Input value={nuevoCaso.vivienda_barreras} onChange={(e) => handleUpperFormValue("vivienda_barreras", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estado vivienda</Label>
+                        <Input value={nuevoCaso.vivienda_estado} onChange={(e) => handleUpperFormValue("vivienda_estado", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-2"><Label>Paredes</Label><Input value={nuevoCaso.vivienda_paredes} onChange={(e) => handleUpperFormValue("vivienda_paredes", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Piso</Label><Input value={nuevoCaso.vivienda_piso} onChange={(e) => handleUpperFormValue("vivienda_piso", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Techo</Label><Input value={nuevoCaso.vivienda_techo} onChange={(e) => handleUpperFormValue("vivienda_techo", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Servicios basicos</Label><Input value={nuevoCaso.vivienda_servicios} onChange={(e) => handleUpperFormValue("vivienda_servicios", e.target.value)} /></div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="salud" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Estado de salud general</Label>
+                        <Select value={nuevoCaso.salud_estado_general} onValueChange={(v) => handleFormValue("salud_estado_general", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BUENA">BUENA</SelectItem>
+                            <SelectItem value="REGULAR">REGULAR</SelectItem>
+                            <SelectItem value="MALA">MALA</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2"><Label>Enfermedad catastrofica</Label><Select value={nuevoCaso.enfermedad_catastrofica} onValueChange={(v) => handleFormValue("enfermedad_catastrofica", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Toma medicacion constante</Label><Select value={nuevoCaso.toma_medicacion_constante} onValueChange={(v) => handleFormValue("toma_medicacion_constante", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Alergia a medicamentos</Label><Select value={nuevoCaso.alergia_medicamentos} onValueChange={(v) => handleFormValue("alergia_medicamentos", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                    </div>
+                    {nuevoCaso.alergia_medicamentos === "SI" && (
+                      <div className="space-y-2">
+                        <Label>Especifique alergia</Label>
+                        <Input value={nuevoCaso.alergia_medicamentos_detalle} onChange={(e) => handleUpperFormValue("alergia_medicamentos_detalle", e.target.value)} />
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="nutricion" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2"><Label>Numero comidas diarias</Label><Input type="number" value={nuevoCaso.nutricion_num_comidas} onChange={(e) => handleFormValue("nutricion_num_comidas", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Consume frutas</Label><Select value={nuevoCaso.nutricion_consume_frutas} onValueChange={(v) => handleFormValue("nutricion_consume_frutas", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2"><Label>Desayuno</Label><Select value={nuevoCaso.nutricion_desayuno} onValueChange={(v) => handleFormValue("nutricion_desayuno", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Almuerzo</Label><Select value={nuevoCaso.nutricion_almuerzo} onValueChange={(v) => handleFormValue("nutricion_almuerzo", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Merienda</Label><Select value={nuevoCaso.nutricion_merienda} onValueChange={(v) => handleFormValue("nutricion_merienda", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="recursos" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="space-y-2"><Label>Recibe pension</Label><Select value={nuevoCaso.recibe_pension} onValueChange={(v) => handleFormValue("recibe_pension", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Monto</Label><Input value={nuevoCaso.pension_monto} onChange={(e) => handleFormValue("pension_monto", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Tipo pension</Label><Input value={nuevoCaso.pension_tipo} onChange={(e) => handleUpperFormValue("pension_tipo", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Indique cual</Label><Input value={nuevoCaso.pension_indique_cual} onChange={(e) => handleUpperFormValue("pension_indique_cual", e.target.value)} /></div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Quien cobra estos ingresos (hasta 3 filas)</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <Input value={nuevoCaso.pension_quien_cobra_1} onChange={(e) => handleUpperFormValue("pension_quien_cobra_1", e.target.value)} placeholder="Fila 1" />
+                        <Input value={nuevoCaso.pension_quien_cobra_2} onChange={(e) => handleUpperFormValue("pension_quien_cobra_2", e.target.value)} placeholder="Fila 2" />
+                        <Input value={nuevoCaso.pension_quien_cobra_3} onChange={(e) => handleUpperFormValue("pension_quien_cobra_3", e.target.value)} placeholder="Fila 3" />
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="red_apoyo" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Ocupa tiempo libre en actividades</Label><Select value={nuevoCaso.red_actividades} onValueChange={(v) => handleFormValue("red_actividades", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Cuales</Label><Input value={nuevoCaso.red_actividades_cuales} onChange={(e) => handleUpperFormValue("red_actividades_cuales", e.target.value)} /></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Sale de su domicilio</Label><Select value={nuevoCaso.red_sale_domicilio} onValueChange={(v) => handleFormValue("red_sale_domicilio", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Donde</Label><Input value={nuevoCaso.red_sale_donde} onChange={(e) => handleUpperFormValue("red_sale_donde", e.target.value)} /></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Pertenece a organizacion</Label><Select value={nuevoCaso.red_pertenece_org} onValueChange={(v) => handleFormValue("red_pertenece_org", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Nombre organizacion</Label><Input value={nuevoCaso.red_nombre_org} onChange={(e) => handleUpperFormValue("red_nombre_org", e.target.value)} /></div>
+                    </div>
+                    <div className="space-y-2"><Label>Actividad en la organizacion</Label><Input value={nuevoCaso.red_actividad_org} onChange={(e) => handleUpperFormValue("red_actividad_org", e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Fuentes de informacion</Label><Textarea rows={2} value={nuevoCaso.red_info_fuentes} onChange={(e) => handleUpperFormValue("red_info_fuentes", e.target.value)} /></div>
+                    <div className="space-y-2"><Label>Cuando necesita hablar con alguien, con quien</Label><Textarea rows={2} value={nuevoCaso.red_habla_con_quien} onChange={(e) => handleUpperFormValue("red_habla_con_quien", e.target.value)} /></div>
+                  </TabsContent>
+
+                  <TabsContent value="coordenadas" className="space-y-4 mt-4">
+                    <p className="text-sm text-gray-600">Si es posible, puedes capturar coordenadas automaticamente o ingresarlas manualmente.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2"><Label>Latitud</Label><Input value={nuevoCaso.latitud} onChange={(e) => handleFormValue("latitud", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Longitud</Label><Input value={nuevoCaso.longitud} onChange={(e) => handleFormValue("longitud", e.target.value)} /></div>
+                      <div className="flex items-end">
+                        <Button className="w-full bg-[#1b76b9] hover:bg-[#155a8a] text-white" onClick={handleCapturarUbicacion} type="button">
+                          Usar ubicacion actual
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Mapa interactivo (click para guardar ubicacion)</Label>
+                      <MapaSelector
+                        lat={Number(nuevoCaso.latitud) || -0.180653}
+                        lng={Number(nuevoCaso.longitud) || -78.467834}
+                        onSelect={(latitud, longitud) => {
+                          setNuevoCaso((prev: any) => ({
+                            ...prev,
+                            latitud: latitud.toFixed(7),
+                            longitud: longitud.toFixed(7),
+                          }));
+                        }}
                       />
+                      <p className="text-xs text-gray-500">Tip: el marcador se posiciona en las coordenadas actuales del formulario.</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Telefono</Label>
-                      <Input value={nuevoCaso.telefono} onChange={(e) => setNuevoCaso((p) => ({ ...p, telefono: e.target.value }))} />
+                  </TabsContent>
+
+                  <TabsContent value="levantamiento" className="space-y-4 mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Se siente acompanado</Label><Select value={nuevoCaso.se_siente_acompanado} onValueChange={(v) => handleFormValue("se_siente_acompanado", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
+                      <div className="space-y-2"><Label>Ha perdido familiar/amigo cercano en ultimo ano</Label><Select value={nuevoCaso.perdida_familiar_reciente} onValueChange={(v) => handleFormValue("perdida_familiar_reciente", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Tipo de caso *</Label>
-                      <Select value={nuevoCaso.tipo_caso} onValueChange={(v) => setNuevoCaso((p) => ({ ...p, tipo_caso: v }))}>
-                        <SelectTrigger><SelectValue placeholder="Seleccione tipo" /></SelectTrigger>
-                        <SelectContent>
-                          {TIPOS_CASO.map((tipo) => (
-                            <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    {nuevoCaso.perdida_familiar_reciente === "SI" && (
+                      <div className="space-y-2">
+                        <Label>Especifique</Label>
+                        <Input value={nuevoCaso.perdida_familiar_detalle} onChange={(e) => handleUpperFormValue("perdida_familiar_detalle", e.target.value)} />
+                      </div>
+                    )}
+                    <div className="space-y-2"><Label>Observaciones y conclusiones</Label><Textarea rows={4} value={nuevoCaso.observaciones_conclusiones} onChange={(e) => handleUpperFormValue("observaciones_conclusiones", e.target.value)} /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2"><Label>Fecha generacion ficha</Label><Input type="date" value={nuevoCaso.fecha_generacion_ficha} onChange={(e) => handleFormValue("fecha_generacion_ficha", e.target.value)} /></div>
+                      <div className="space-y-2"><Label>Ficha social PDF *</Label><Input type="file" accept=".pdf" onChange={(e) => setFichaPdf(e.target.files?.[0] || null)} /></div>
+                      <div className="space-y-2"><Label>Firma (imagen)</Label><Input type="file" accept=".jpg,.jpeg,.png" onChange={(e) => setFirmaImagen(e.target.files?.[0] || null)} /></div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Prioridad *</Label>
-                      <Select value={nuevoCaso.prioridad} onValueChange={(v) => setNuevoCaso((p) => ({ ...p, prioridad: v }))}>
-                        <SelectTrigger><SelectValue placeholder="Seleccione prioridad" /></SelectTrigger>
-                        <SelectContent>
-                          {PRIORIDADES.map((p) => (
-                            <SelectItem key={p} value={p}>{p}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Tipo de caso</Label>
+                        <Select value={nuevoCaso.tipo_caso} onValueChange={(v) => handleFormValue("tipo_caso", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione tipo" /></SelectTrigger>
+                          <SelectContent>
+                            {TIPOS_CASO.map((tipo) => (
+                              <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Prioridad</Label>
+                        <Select value={nuevoCaso.prioridad} onValueChange={(v) => handleFormValue("prioridad", v)}>
+                          <SelectTrigger><SelectValue placeholder="Seleccione prioridad" /></SelectTrigger>
+                          <SelectContent>
+                            {PRIORIDADES.map((p) => (
+                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+                  </TabsContent>
+                </Tabs>
+
+                <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:justify-between">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      disabled={TABS_CASO.indexOf(tabCaso) === 0}
+                      onClick={() => setTabCaso(TABS_CASO[Math.max(TABS_CASO.indexOf(tabCaso) - 1, 0)])}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      type="button"
+                      disabled={TABS_CASO.indexOf(tabCaso) === TABS_CASO.length - 1}
+                      onClick={() => setTabCaso(TABS_CASO[Math.min(TABS_CASO.indexOf(tabCaso) + 1, TABS_CASO.length - 1)])}
+                    >
+                      Siguiente
+                    </Button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Ciudad</Label>
-                      <Input value={nuevoCaso.ciudad} onChange={(e) => setNuevoCaso((p) => ({ ...p, ciudad: e.target.value }))} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Provincia</Label>
-                      <Input value={nuevoCaso.provincia} onChange={(e) => setNuevoCaso((p) => ({ ...p, provincia: e.target.value }))} />
-                    </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={savingCaso}>Cancelar</Button>
+                    <Button className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white" onClick={handleCrearCaso} disabled={savingCaso}>
+                      {savingCaso ? "Guardando..." : "Registrar caso"}
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" value={nuevoCaso.email} onChange={(e) => setNuevoCaso((p) => ({ ...p, email: e.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Direccion</Label>
-                    <Input value={nuevoCaso.direccion} onChange={(e) => setNuevoCaso((p) => ({ ...p, direccion: e.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Descripcion del caso *</Label>
-                    <Textarea rows={4} value={nuevoCaso.descripcion_caso} onChange={(e) => setNuevoCaso((p) => ({ ...p, descripcion_caso: e.target.value }))} />
-                  </div>
-                  <p className="text-xs text-gray-500">El usuario creador se asigna automaticamente con tu sesion.</p>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={savingCaso}>Cancelar</Button>
-                  <Button className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white" onClick={handleCrearCaso} disabled={savingCaso}>
-                    {savingCaso ? "Guardando..." : "Registrar caso"}
-                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
