@@ -490,7 +490,7 @@ export default function Layout() {
               </Button>
               <Button
                 type="submit"
-                className="bg-[#4064E3] hover:bg-[#3451C2] flex-1"
+                className="bg-[#4064E3] hover:bg-[#3451C2] text-white flex-1"
                 disabled={submitting}
               >
                 {submitting ? "Actualizando..." : "Cambiar Contrasena"}

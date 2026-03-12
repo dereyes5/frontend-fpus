@@ -784,7 +784,7 @@ export default function Cartera() {
                   <Button
                     onClick={handleImportarExcel}
                     disabled={!archivoSeleccionado || importando}
-                    className="bg-[#1b76b9] hover:bg-[#155a8a]"
+                    className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
                   >
                     {importando ? (
                       <>
@@ -922,7 +922,7 @@ export default function Cartera() {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleCerrarModalImportacion}
-                    className="bg-[#1b76b9] hover:bg-[#155a8a]"
+                    className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
                   >
                     Cerrar
                   </Button>

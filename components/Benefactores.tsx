@@ -158,7 +158,7 @@ export default function Benefactores() {
   const [ciudadFilter, setCiudadFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
   const [globalFilter, setGlobalFilter] = useState("");
-  
+
   // Estado para react-table (una sola tabla ahora)
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -250,7 +250,7 @@ export default function Benefactores() {
   const loadBenefactores = async () => {
     try {
       setLoading(true);
-      
+
       // Cargar benefactores (filtrados según permisos del usuario)
       const response = await benefactoresService.getBenefactores();
       const data: Benefactor[] = response.data;
@@ -266,7 +266,7 @@ export default function Benefactores() {
       // Cargar bancos
       const bancosResponse = await bancosService.getAll();
       setBancos(bancosResponse.data.data || []);
-      
+
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Error al cargar benefactores");
     } finally {
@@ -493,14 +493,14 @@ export default function Benefactores() {
   // Aplicar filtros unificados
   const benefactoresFiltrados = useMemo(() => {
     return benefactoresBase.filter((benefactor) => {
-      const matchesSearch = 
+      const matchesSearch =
         benefactor.nombre_completo.toLowerCase().includes(globalFilter.toLowerCase()) ||
         (benefactor.cedula || "").includes(globalFilter) ||
         (benefactor.n_convenio || "").toLowerCase().includes(globalFilter.toLowerCase());
 
       const matchesEstado = estadoFilter === "todos" || benefactor.estado === estadoFilter;
-      const matchesCiudad = 
-        ciudadFilter === "todos" || 
+      const matchesCiudad =
+        ciudadFilter === "todos" ||
         (benefactor.ciudad || "").toLowerCase() === ciudadFilter.toLowerCase();
       const matchesTipo = tipoFilter === "todos" || benefactor.tipo_benefactor === tipoFilter;
 
@@ -1094,7 +1094,7 @@ export default function Benefactores() {
                 </Button>
 
                 <Button
-                  className="bg-[#0F8F5B] hover:bg-[#0D7A4C]"
+                  className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white"
                   onClick={handleGuardarBenefactor}
                   disabled={guardando || subiendoContrato || !contratoFile}
                 >

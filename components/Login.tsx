@@ -202,6 +202,7 @@ export default function Login() {
               className="
                 w-full h-14 rounded-xl
                 bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4]
+                text-white
                 transition-all duration-300
                 hover:scale-[1.02] hover:shadow-xl
               "
