@@ -1,5 +1,5 @@
 import api from './api';
-import type { 
+import type {
   BeneficiarioSocial
 } from '../types';
 
@@ -92,19 +92,19 @@ export const agregarSeguimiento = async (
   formData.append('tipo_evento', tipoEvento);
   formData.append('descripcion', descripcion);
   formData.append('fecha_evento', fechaEvento);
-  
+
   if (fotos && fotos.length > 0) {
     fotos.forEach(foto => {
       formData.append('fotos', foto);
     });
   }
-  
+
   const response = await api.post('/social/seguimiento', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
   });
-  
+
   return response.data;
 };
 
