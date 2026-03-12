@@ -386,7 +386,7 @@ export default function Social() {
       prioridad: (nuevoCaso.prioridad || "Media") as BeneficiarioSocial["prioridad"],
       nombres: nuevoCaso.nombres,
       apellidos: nuevoCaso.apellidos,
-      sexo: nuevoCaso.sexo,
+      sexo: nuevoCaso.sexo as "M" | "F",
       edad: nuevoCaso.edad ? Number(nuevoCaso.edad) : undefined,
       cedula: nuevoCaso.cedula,
       nacionalidad: nuevoCaso.nacionalidad || undefined,
