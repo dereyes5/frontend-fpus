@@ -170,7 +170,7 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder="••••••••"
                   disabled={submitting}
                   className="h-14 pl-12 pr-12 rounded-xl border-2 focus:border-[#1b76b9]"
                 />

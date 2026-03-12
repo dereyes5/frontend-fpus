@@ -1,4 +1,8 @@
 import axios from 'axios';
+import moment from 'moment-timezone';
+
+// Configurar timezone por defecto para la aplicación frontend
+moment.tz.setDefault('America/Guayaquil');
 
 const api = axios.create({
   baseURL: 'http://154.12.234.100:3000/api',
@@ -14,12 +18,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     // Si se está enviando FormData, eliminar el Content-Type para que axios lo configure automáticamente
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     }
-    
+
     return config;
   },
   (error) => {

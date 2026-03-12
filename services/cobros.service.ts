@@ -91,14 +91,29 @@ export const cobrosService = {
   /**
    * Importar archivo Excel de débitos mensuales
    */
-  async importarExcelDebitos(archivo: File): Promise<ApiResponse<any>> {
+  async importarExcelDebitos(archivo: File, mesDetectado?: number, anioDetectado?: number): Promise<ApiResponse<any>> {
     const formData = new FormData();
     formData.append('archivo', archivo);
+    if (mesDetectado !== undefined) {
+      formData.append('mes', mesDetectado.toString());
+    }
+    if (anioDetectado !== undefined) {
+      formData.append('anio', anioDetectado.toString());
+    }
 
     const response = await api.post<ApiResponse<any>>('/cobros/debitos/importar', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+    });
+    return response.data;
+  },
+
+  async validarPreviewDebitos(codigosTercero: string[], mes: number, anio: number): Promise<ApiResponse<any[]>> {
+    const response = await api.post<ApiResponse<any[]>>('/cobros/debitos/validar-preview', {
+      codigosTercero,
+      mes,
+      anio,
     });
     return response.data;
   },

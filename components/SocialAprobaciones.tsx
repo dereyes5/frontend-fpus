@@ -34,6 +34,14 @@ function colorPrioridad(prioridad?: string) {
   return "bg-gray-500 text-white";
 }
 
+const API_BASE = "http://154.12.234.100:3000";
+
+function buildCasoArchivoUrl(rutaArchivo?: string) {
+  if (!rutaArchivo) return "";
+  const normalized = rutaArchivo.split("/").map(encodeURIComponent).join("/");
+  return `${API_BASE}/uploads/social/casos/${normalized}`;
+}
+
 export default function SocialAprobaciones() {
   const { permisos } = useAuth();
   const puedeAprobar = permisos?.aprobaciones_social ?? false;
@@ -466,6 +474,21 @@ export default function SocialAprobaciones() {
                   <p className="font-medium">{previewCaso.telefono || "-"}</p>
                 </div>
               </div>
+              <Separator />
+              {previewCaso.ficha_pdf_ruta && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm text-gray-700 mb-2">Ficha social adjunta</p>
+                  <a
+                    href={buildCasoArchivoUrl(previewCaso.ficha_pdf_ruta)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center px-3 py-1.5 rounded-md bg-[#1b76b9] hover:bg-[#155a8a] text-white text-sm"
+                    download
+                  >
+                    Descargar PDF
+                  </a>
+                </div>
+              )}
               <Separator />
               <div>
                 <p className="text-gray-500 text-sm mb-1">Descripcion</p>

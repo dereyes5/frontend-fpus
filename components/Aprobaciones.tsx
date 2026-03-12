@@ -210,7 +210,7 @@ export default function Aprobaciones() {
     if (sortField !== field) {
       return <ArrowUpDown className="h-4 w-4 ml-1 inline" />;
     }
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ArrowUp className="h-4 w-4 ml-1 inline" />
       : <ArrowDown className="h-4 w-4 ml-1 inline" />;
   };
@@ -218,11 +218,11 @@ export default function Aprobaciones() {
   // Filtrado y ordenamiento
   const pendientesFiltrados = useMemo(() => {
     let filtered = pendientes.filter((item) => {
-      const matchSearch = 
+      const matchSearch =
         item.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.cedula || "").includes(searchTerm) ||
         (item.n_convenio || "").toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchTipo = tipoFilter === "todos" || item.tipo_benefactor === tipoFilter;
 
       return matchSearch && matchTipo;
@@ -376,11 +376,11 @@ export default function Aprobaciones() {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
           {/* Vista desktop - Tabla */}
           <div className="hidden md:block overflow-x-auto">
-            <Table className="table-fixed min-w-[1180px]">
+            <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead 
-                      className="w-[12%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                    <TableHead
+                      className="w-[11%] text-center cursor-pointer hover:bg-gray-100 select-none"
                       onClick={() => handleSort('n_convenio')}
                     >
                       <div className="flex items-center justify-center">
@@ -388,8 +388,8 @@ export default function Aprobaciones() {
                         {renderSortIcon('n_convenio')}
                       </div>
                     </TableHead>
-                    <TableHead 
-                      className="w-[18%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                    <TableHead
+                      className="w-[17%] text-center cursor-pointer hover:bg-gray-100 select-none"
                       onClick={() => handleSort('nombre_completo')}
                     >
                       <div className="flex items-center justify-center">
@@ -398,10 +398,11 @@ export default function Aprobaciones() {
                       </div>
                     </TableHead>
                     <TableHead className="w-[12%] text-center">Cédula</TableHead>
-                    <TableHead className="w-[10%] text-center">Tipo</TableHead>
-                    <TableHead className="w-[12%] text-center">Ejecutivo</TableHead>
-                    <TableHead className="w-[12%] text-center">Fecha Registro</TableHead>
-                    <TableHead className="w-[24%] text-center">Acciones</TableHead>
+                    <TableHead className="w-[12%] text-center">Cédula</TableHead>
+                    <TableHead className="w-[9%] text-center">Tipo</TableHead>
+                    <TableHead className="w-[11%] text-center">Ejecutivo</TableHead>
+                    <TableHead className="w-[11%] text-center">Fecha Registro</TableHead>
+                    <TableHead className="w-[29%] text-center">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
 
@@ -419,19 +420,19 @@ export default function Aprobaciones() {
                       <TableCell className="truncate text-center">{benefactor.ejecutivo || "N/A"}</TableCell>
                       <TableCell className="truncate text-center">{benefactor.fecha_suscripcion ? formatDate(benefactor.fecha_suscripcion) : "N/A"}</TableCell>
 
-                      <TableCell className="text-center">
-                        <div className="flex gap-2 justify-center flex-nowrap">
+                      <TableCell className="text-center px-2">
+                        <div className="flex gap-1.5 justify-center flex-nowrap">
                           {/* ✅ Preview en Dialog (no redirección) */}
-                          <Button size="sm" variant="outline" className="whitespace-nowrap" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
+                          <Button size="sm" variant="outline" className="whitespace-nowrap px-2" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
                             <Eye className="h-4 w-4 mr-1" />
-                            Ver detalles
+                            Detalles
                           </Button>
 
                           {puedeAprobar ? (
                             <>
                               <Button
                                 size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap"
+                                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap px-2"
                                 onClick={() => handleOpenDialog(benefactor, "APROBADO")}
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
@@ -439,7 +440,7 @@ export default function Aprobaciones() {
                               </Button>
                               <Button
                                 size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
+                                className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap px-2"
                                 onClick={() => handleOpenDialog(benefactor, "RECHAZADO")}
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
@@ -500,9 +501,9 @@ export default function Aprobaciones() {
                     <Separator />
 
                     <div className="flex flex-col gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="w-full"
                         onClick={() => handleOpenPreview(benefactor.id_benefactor)}
                       >
@@ -678,8 +679,8 @@ export default function Aprobaciones() {
                     <Badge
                       className={
                         previewBenefactor.estado === "ACTIVO"
-                          ? "bg-[#0F8F5B] hover:bg-[#0D7A4C]"
-                          : "bg-gray-400 hover:bg-gray-500"
+                          ? "bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white"
+                          : "bg-gray-400 hover:bg-gray-500 text-white"
                       }
                     >
                       {previewBenefactor.estado}

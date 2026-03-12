@@ -1,5 +1,7 @@
-import { useEffect, useState, useMemo, useRef } from "react";
-import { DollarSign, TrendingUp, Users, Search, History, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { DollarSign, TrendingUp, Users, Search, History, X, Check, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Upload, FileSpreadsheet, AlertCircle } from "lucide-react";
+import * as XLSX from "xlsx";
+import moment from "moment-timezone";
 import { Card, CardContent } from "./ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
@@ -8,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { cobrosService } from "../services/cobros.service";
-import { EstadoPago, Estadisticas, ResultadoImportacion } from "../types";
+import { EstadoPago, Estadisticas } from "../types";
 import { toast } from "sonner";
 
 interface HistorialAporte {
@@ -53,8 +55,20 @@ export default function Cartera() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
   const [importando, setImportando] = useState(false);
-  const [resultadoImportacion, setResultadoImportacion] = useState<ResultadoImportacion | null>(null);
+  const [mesDetectado, setMesDetectado] = useState<number | null>(null);
+  const [anioDetectado, setAnioDetectado] = useState<number | null>(null);
+  const [mostrarAdvertenciaFecha, setMostrarAdvertenciaFecha] = useState(false);
+  const [datosPreview, setDatosPreview] = useState<any[] | null>(null);
+  const [validacionesPreview, setValidacionesPreview] = useState<any[]>([]);
+  const [totalRegistrosExcel, setTotalRegistrosExcel] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hayCodigosDuplicados = useMemo(
+    () => validacionesPreview.some(v =>
+      Array.isArray(v?.errores) && v.errores.some((e: string) => e.includes('Código de tercero duplicado'))
+    ),
+    [validacionesPreview]
+  );
 
   useEffect(() => {
     loadData();
@@ -138,28 +152,333 @@ export default function Cartera() {
   const handleAbrirModalImportacion = () => {
     setImportModalOpen(true);
     setArchivoSeleccionado(null);
-    setResultadoImportacion(null);
+    setMesDetectado(null);
+    setAnioDetectado(null);
+    setMostrarAdvertenciaFecha(false);
+    setDatosPreview(null);
+    setValidacionesPreview([]);
+    setTotalRegistrosExcel(0);
   };
 
   const handleSeleccionarArchivo = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Validar extension
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      if (extension !== 'xlsx' && extension !== 'xls') {
-        toast.error('Solo se permiten archivos Excel (.xlsx, .xls)');
-        return;
-      }
 
-      // Validar tamaño (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('El archivo no debe superar los 5MB');
-        return;
-      }
-
-      setArchivoSeleccionado(file);
-      setResultadoImportacion(null);
+    if (!file) {
+      toast.error('No se seleccionó ningún archivo');
+      return;
     }
+
+    // Validar nombre del archivo (caracteres válidos)
+    if (!/^[\w\s\-\.\(\)áéíóúñÁÉÍÓÚÑ]+\.(xlsx|xls)$/i.test(file.name)) {
+      toast.error('El nombre del archivo contiene caracteres no válidos');
+      return;
+    }
+
+    // Validar extension
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (extension !== 'xlsx' && extension !== 'xls') {
+      toast.error('Solo se permiten archivos Excel (.xlsx, .xls)');
+      return;
+    }
+
+    // Validar tamaño (max 5MB)
+    if (file.size === 0) {
+      toast.error('El archivo está vacío. Selecciona un archivo con datos');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('El archivo no debe superar los 5MB');
+      return;
+    }
+
+    // Validar tipo MIME (aunque el usuario puede cambiar extensión)
+    const validMimeTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+    if (file.type && !validMimeTypes.includes(file.type)) {
+      console.warn('Tipo MIME no reconocido:', file.type, '- continuando de todas formas');
+    }
+
+    // Leer el archivo Excel para detectar mes/año y preparar preview
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      toast.error('Error al leer el archivo. Verifica que es un Excel válido');
+      console.error('FileReader error:', reader.error);
+    };
+
+    reader.onload = async (e) => {
+      try {
+        const data = e.target?.result;
+
+        if (!data) {
+          toast.error('No se pudo leer el contenido del archivo');
+          return;
+        }
+
+        // Intentar leer como Excel
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true, defval: '' });
+
+        // Validar que hay al menos una hoja
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+          toast.error('El archivo Excel no contiene ninguna hoja de datos');
+          return;
+        }
+
+        const nombreHoja = workbook.SheetNames[0];
+        const hoja = workbook.Sheets[nombreHoja];
+
+        if (!hoja) {
+          toast.error('No se pudo leer la hoja de datos del Excel');
+          return;
+        }
+
+        const filas = XLSX.utils.sheet_to_json(hoja, { defval: null, blankrows: false });
+
+        // Validar que hay datos
+        if (!filas || filas.length === 0) {
+          toast.error('El archivo Excel no contiene datos. Añade registros a la hoja');
+          return;
+        }
+
+        // Validar que la primera fila no está completamente vacía
+        const primeraFila = filas[0];
+        const columnasValidas = Object.values(primeraFila).some(val => val !== null && val !== undefined && val !== '');
+        if (!columnasValidas) {
+          toast.error('La primera fila del Excel está vacía. Verifica los datos');
+          return;
+        }
+
+        // Validar columnas requeridas
+        const columnas = Object.keys(primeraFila);
+        const tieneEstado = columnas.some(c => c.toLowerCase().includes('estado'));
+        const tieneCodTercero = columnas.some(c => c.toLowerCase().includes('cod') && c.toLowerCase().includes('tercero'));
+        const tieneFecha = columnas.some(c => c.toLowerCase().includes('fecha') && (c.toLowerCase().includes('transmision') || c.toLowerCase().includes('pago')));
+
+        if (!tieneEstado || !tieneCodTercero || !tieneFecha) {
+          toast.error('El Excel no tiene las columnas requeridas: Estado, cod_tercero, fecha_transmision/fecha_pago');
+          return;
+        }
+
+        let mesesEncontrados = new Set<number>();
+        let aniosEncontrados = new Set<number>();
+
+        // Detectar columna de fecha (buscar variantes comunes)
+        const colFecha = columnas.find(c =>
+          c.toLowerCase().includes('fecha') &&
+          (c.toLowerCase().includes('transmision') || c.toLowerCase().includes('pago'))
+        );
+
+        // Validar que hay datos con fechas válidas
+        let filasConFechaValida = 0;
+
+        // Función auxiliar para parsear fechas del Excel (DD/MM/YYYY o números de serie)
+        const parsearFechaExcel = (valor: any): moment.Moment | null => {
+          if (!valor) return null;
+
+          let fecha: moment.Moment | null = null;
+
+          // Si es número (serie de Excel)
+          if (typeof valor === 'number') {
+            fecha = moment.tz(new Date((valor - 25569) * 86400 * 1000), 'America/Guayaquil');
+          }
+          // Si es string, intentar varios formatos
+          else if (typeof valor === 'string') {
+            const s = valor.trim();
+            // Intentar DD/MM/YYYY primero (formato bancario ecuatoriano)
+            fecha = moment.tz(s, 'DD/MM/YYYY', true, 'America/Guayaquil');
+            if (!fecha.isValid()) {
+              // Si no funciona, intentar DD-MM-YYYY
+              fecha = moment.tz(s, 'DD-MM-YYYY', true, 'America/Guayaquil');
+            }
+            if (!fecha.isValid()) {
+              // Si tampoco, intentar YYYY-MM-DD
+              fecha = moment.tz(s, 'YYYY-MM-DD', true, 'America/Guayaquil');
+            }
+            if (!fecha.isValid()) {
+              // Último intento: dejar que moment intente adivinar
+              fecha = moment.tz(s, 'America/Guayaquil');
+            }
+          }
+          // Si ya es un Date
+          else if (valor instanceof Date) {
+            fecha = moment.tz(valor, 'America/Guayaquil');
+          }
+
+          return fecha && fecha.isValid() ? fecha : null;
+        };
+
+        if (colFecha) {
+          // Extraer mes/año de las fechas
+          filas.forEach((fila: any) => {
+            const valorFecha = fila[colFecha];
+            if (valorFecha !== null && valorFecha !== undefined && valorFecha !== '') {
+              const fecha = parsearFechaExcel(valorFecha);
+              if (fecha) {
+                mesesEncontrados.add(fecha.month() + 1);
+                aniosEncontrados.add(fecha.year());
+                filasConFechaValida++;
+              }
+            }
+          });
+
+          // Validar que hay al menos una fecha válida
+          if (filasConFechaValida === 0) {
+            toast.error('No se encontraron fechas válidas en el archivo. Verifica el formato (DD/MM/YYYY)');
+            return;
+          }
+        }
+
+        // Verificar si hay múltiples meses
+        if (mesesEncontrados.size > 1 || aniosEncontrados.size > 1) {
+          toast.error('El archivo contiene registros de diferentes meses. Solo se permite un mes por archivo.');
+          return;
+        }
+
+        // Validar que se detectó al menos un mes
+        if (mesesEncontrados.size === 0) {
+          toast.error('No se pudo detectar ningún período en las fechas del archivo');
+          return;
+        }
+
+        // Comparar con el mes actual
+        const mesActual = moment.tz('America/Guayaquil').month() + 1;
+        const anioActual = moment.tz('America/Guayaquil').year();
+        const mesDetectado = Array.from(mesesEncontrados)[0];
+        const anioDetectado = Array.from(aniosEncontrados)[0];
+
+        setMesDetectado(mesDetectado || null);
+        setAnioDetectado(anioDetectado || null);
+        setTotalRegistrosExcel(filas.length);
+
+        // Preparar datos para el preview (primeras 5 filas)
+        const columnasKey = Object.keys(filas[0]);
+        const colEstado = columnasKey.find(c => c.toLowerCase().includes('estado'));
+        const colCodTercero = columnasKey.find(c =>
+          c.toLowerCase().includes('cod') && c.toLowerCase().includes('tercero')
+        );
+        const colFechaTrans = columnasKey.find(c =>
+          c.toLowerCase().includes('fecha') && c.toLowerCase().includes('transmision')
+        );
+
+        const preview = filas.map((fila: any, idx: number) => ({
+          fila_numero: idx + 2,
+          estado: fila[colEstado] || '-',
+          cod_tercero: fila[colCodTercero] || '-',
+          fecha_transmision: fila[colFechaTrans]
+            ? (parsearFechaExcel(fila[colFechaTrans])?.format('DD/MM/YYYY') || '-')
+            : '-'
+        }));
+
+        // Validar cada fila para mostrar errores en preview
+        const esEstadoProcesoOk = (estado: string) => /^PROCESO\s*O\.?K\.?$/i.test(estado.trim());
+        const esEstadoError = (estado: string) => /^ERROR\s*:\s*.+$/i.test(estado.trim());
+
+        // Detectar códigos de tercero duplicados entre filas (case-insensitive)
+        const filasPorCodTercero = new Map<string, number[]>();
+        filas.forEach((fila: any, idx: number) => {
+          const cod = fila[colCodTercero]?.toString().trim();
+          if (!cod) return;
+          const codNormalizado = cod.toUpperCase();
+          const filasActuales = filasPorCodTercero.get(codNormalizado) || [];
+          filasActuales.push(idx + 2);
+          filasPorCodTercero.set(codNormalizado, filasActuales);
+        });
+
+        const codigosPreview = filas
+          .map((fila: any) => fila[colCodTercero]?.toString().trim())
+          .filter(Boolean);
+
+        let codigosYaAportados = new Map<string, { nombre_completo?: string; fecha_transmision?: string }>();
+        try {
+          const validacionRemota = await cobrosService.validarPreviewDebitos(
+            codigosPreview,
+            mesDetectado,
+            anioDetectado
+          );
+
+          (validacionRemota.data || []).forEach((item: any) => {
+            codigosYaAportados.set(item.cod_tercero?.toString().trim().toUpperCase(), {
+              nombre_completo: item.nombre_completo,
+              fecha_transmision: item.fecha_transmision,
+            });
+          });
+        } catch (error) {
+          console.error('Error validando preview contra datos existentes:', error);
+        }
+
+        const validacionesPorFila = filas.map((fila: any, idx: number) => {
+          const errores: string[] = [];
+
+          // Validar estado
+          const estadoValor = fila[colEstado]?.toString().trim();
+          if (!estadoValor) {
+            errores.push('Estado vacío');
+          } else if (!esEstadoProcesoOk(estadoValor) && !esEstadoError(estadoValor)) {
+            errores.push(`Estado inválido: "${estadoValor}". Válidos: "Proceso O.K." o "Error: detalle"`);
+          }
+
+          // Validar código de tercero
+          const codTerceroValor = fila[colCodTercero]?.toString().trim();
+          if (!codTerceroValor) {
+            errores.push('Código de tercero vacío');
+          } else {
+            const codNormalizado = codTerceroValor.toUpperCase();
+            const filasDuplicadas = filasPorCodTercero.get(codNormalizado) || [];
+            if (filasDuplicadas.length > 1) {
+              errores.push(`Código de tercero duplicado en filas: ${filasDuplicadas.join(', ')}`);
+            }
+
+            const aportadoExistente = codigosYaAportados.get(codNormalizado);
+            if (aportadoExistente) {
+              errores.push(`Ya existe un débito aportado para este convenio en ${formatMesAnio(mesDetectado, anioDetectado)}`);
+            }
+          }
+
+          // Validar fecha
+          const fechaValor = fila[colFechaTrans];
+          if (!fechaValor) {
+            errores.push('Fecha de transmisión vacía');
+          } else {
+            const fechaParsed = parsearFechaExcel(fechaValor);
+            if (!fechaParsed) {
+              errores.push(`Fecha inválida: no se pudo parsear "${fechaValor}"`);
+            }
+          }
+
+          return {
+            fila_numero: idx + 2,
+            valida: errores.length === 0,
+            errores
+          };
+        });
+
+        setValidacionesPreview(validacionesPorFila as any);
+        setDatosPreview(preview);
+
+        if (mesDetectado && anioDetectado) {
+          if (mesDetectado !== mesActual || anioDetectado !== anioActual) {
+            setMostrarAdvertenciaFecha(true);
+          } else {
+            setMostrarAdvertenciaFecha(false);
+          }
+        }
+
+        setArchivoSeleccionado(file);
+      } catch (error: any) {
+        console.error('Error al procesar archivo Excel:', error);
+
+        // Mensajes de error más específicos
+        if (error instanceof TypeError) {
+          toast.error('El archivo no es un Excel válido. Verifica que es .xlsx o .xls');
+        } else if (error.message?.includes('zip')) {
+          toast.error('El archivo Excel está corrupto o dañado');
+        } else {
+          toast.error('Error al procesar el archivo Excel. Verifica que es válido');
+        }
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
   };
 
   const handleImportarExcel = async () => {
@@ -171,20 +490,28 @@ export default function Cartera() {
     try {
       setImportando(true);
 
-      const resultado = await cobrosService.importarExcelDebitos(archivoSeleccionado);
-
-      setResultadoImportacion(resultado as any);
+      const resultado = await cobrosService.importarExcelDebitos(
+        archivoSeleccionado,
+        mesDetectado || undefined,
+        anioDetectado || undefined
+      );
 
       // Mostrar resumen
       if (resultado.success) {
-        const totalRegistros = (resultado as any)?.lote?.total_registros ?? (resultado as any)?.data?.lote?.total_registros ?? 0;
-        toast.success(
-          `Importación exitosa: ${totalRegistros} registros procesados`,
-          { duration: 5000 }
-        );
+        const nombreArchivo = archivoSeleccionado.name;
+        const erroresCarga = (resultado as any)?.errores || [];
+
+        toast.success(`Exito al subir el archivo "${nombreArchivo}"`, { duration: 4000 });
+
+        if (erroresCarga.length > 0) {
+          toast.warning(`Se cargó con ${erroresCarga.length} advertencias. Revisa el historial del lote para el detalle.`, {
+            duration: 6000,
+          });
+        }
 
         // Recargar datos
         loadData();
+        handleCerrarModalImportacion();
       } else {
         toast.error('Error en la importación');
       }
@@ -200,7 +527,12 @@ export default function Cartera() {
   const handleCerrarModalImportacion = () => {
     setImportModalOpen(false);
     setArchivoSeleccionado(null);
-    setResultadoImportacion(null);
+    setMesDetectado(null);
+    setAnioDetectado(null);
+    setMostrarAdvertenciaFecha(false);
+    setDatosPreview(null);
+    setValidacionesPreview([]);
+    setTotalRegistrosExcel(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -709,9 +1041,9 @@ export default function Cartera() {
           )}
         </DialogContent>
       </Dialog>
-      {/* Modal de Importación de Débitos */}
+      {/* Modal único de validación y confirmación */}
       <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-[#1b76b9]" />
@@ -720,217 +1052,206 @@ export default function Cartera() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {!resultadoImportacion ? (
-              <>
-                {/* Instrucciones */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-900 mb-2">Instrucciones:</h4>
-                  <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-                    <li>El archivo debe ser formato Excel (.xlsx o .xls)</li>
-                    <li>Debe contener las columnas: Estado, cod_tercero, fecha_transmision</li>
-                    <li>El sistema identificará automáticamente el mes/año del lote</li>
-                    <li>El Excel debe cargarse por titular (convenio titular)</li>
-                    <li>Si llega convenio de dependiente, la fila se rechaza</li>
-                    <li>El estado del titular se propaga a sus dependientes del grupo</li>
-                  </ul>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2">Instrucciones:</h4>
+              <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                <li>El archivo debe ser formato Excel (.xlsx o .xls)</li>
+                <li>Debe contener las columnas: Estado, cod_tercero, fecha_transmision</li>
+                <li>Estados válidos: Proceso O.K. y Error: detalle</li>
+                <li>Se permiten filas con errores, pero quedarán reportadas en la validación</li>
+              </ul>
+            </div>
+
+            {/* Selector de archivo */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleSeleccionarArchivo}
+                className="hidden"
+                id="file-upload"
+              />
+              <label
+                htmlFor="file-upload"
+                className="cursor-pointer flex flex-col items-center gap-3"
+              >
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                  <Upload className="h-8 w-8 text-gray-400" />
                 </div>
-
-                {/* Selector de archivo */}
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleSeleccionarArchivo}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="cursor-pointer flex flex-col items-center gap-3"
-                  >
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                      <Upload className="h-8 w-8 text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-medium text-gray-700">
-                        {archivoSeleccionado ? archivoSeleccionado.name : 'Seleccionar archivo Excel'}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {archivoSeleccionado
-                          ? `${(archivoSeleccionado.size / 1024 / 1024).toFixed(2)} MB`
-                          : 'Haz clic o arrastra un archivo aquí'
-                        }
-                      </p>
-                    </div>
-                    {archivoSeleccionado && (
-                      <Badge className="bg-green-100 text-green-800">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Archivo listo
-                      </Badge>
-                    )}
-                  </label>
+                <div>
+                  <p className="text-lg font-medium text-gray-700">
+                    {archivoSeleccionado ? archivoSeleccionado.name : 'Seleccionar archivo Excel'}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {archivoSeleccionado
+                      ? `${(archivoSeleccionado.size / 1024 / 1024).toFixed(2)} MB`
+                      : 'Haz clic para seleccionar un archivo'}
+                  </p>
                 </div>
+              </label>
+            </div>
 
-                {/* Botones */}
-                <div className="flex justify-end gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={handleCerrarModalImportacion}
-                    disabled={importando}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleImportarExcel}
-                    disabled={!archivoSeleccionado || importando}
-                    className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
-                  >
-                    {importando ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Importando...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Importar
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Resultado de la importación */}
-                <div className={`rounded-lg p-6 ${resultadoImportacion.success
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
-                  }`}>
-                  <div className="flex items-start gap-3">
-                    {resultadoImportacion.success ? (
-                      <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0 mt-1" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-1" />
-                    )}
-                    <div className="flex-1">
-                      <h4 className={`font-semibold text-lg mb-2 ${resultadoImportacion.success ? 'text-green-900' : 'text-red-900'
-                        }`}>
-                        {resultadoImportacion.success
-                          ? '✓ Importación Exitosa'
-                          : '✗ Error en la Importación'
-                        }
-                      </h4>
-
-                      {resultadoImportacion.success && (
-                        <div className="space-y-3 text-sm">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white rounded p-3">
-                              <p className="text-gray-600">Archivo</p>
-                              <p className="font-semibold text-gray-900">
-                                {resultadoImportacion.lote?.nombre_archivo}
-                              </p>
-                            </div>
-                            <div className="bg-white rounded p-3">
-                              <p className="text-gray-600">Periodo</p>
-                              <p className="font-semibold text-gray-900">
-                                {formatMesAnio(
-                                  resultadoImportacion.lote?.mes || 0,
-                                  resultadoImportacion.lote?.anio || 0
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="bg-white rounded p-4">
-                            <h5 className="font-semibold text-gray-900 mb-2">Registros Importados:</h5>
-                            <div className="grid grid-cols-3 gap-3 text-center">
-                              <div>
-                                <p className="text-2xl font-bold text-blue-600">
-                                  {resultadoImportacion.lote?.total_registros}
-                                </p>
-                                <p className="text-xs text-gray-600">Total</p>
-                              </div>
-                              <div>
-                                <p className="text-2xl font-bold text-green-600">
-                                  {resultadoImportacion.lote?.insertados_exitosos}
-                                </p>
-                                <p className="text-xs text-gray-600">Exitosos</p>
-                              </div>
-                              <div>
-                                <p className="text-2xl font-bold text-red-600">
-                                  {resultadoImportacion.lote?.insertados_fallidos || 0}
-                                </p>
-                                <p className="text-xs text-gray-600">Fallidos</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-white rounded p-4">
-                            <h5 className="font-semibold text-gray-900 mb-2">Procesamiento:</h5>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-sm">
-                                  <strong>{resultadoImportacion.procesamiento?.titulares_aportados}</strong> Aportados
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                <span className="text-sm">
-                                  <strong>{resultadoImportacion.procesamiento?.titulares_no_aportados}</strong> No Aportados
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-sm">
-                                  <strong>{resultadoImportacion.procesamiento?.dependientes_actualizados}</strong> Dependientes actualizados
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {resultadoImportacion.errores && resultadoImportacion.errores.length > 0 && (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertCircle className="h-4 w-4 text-yellow-600" />
-                                <h6 className="font-semibold text-yellow-900">
-                                  Advertencias ({resultadoImportacion.errores.length})
-                                </h6>
-                              </div>
-                              <div className="max-h-40 overflow-y-auto space-y-1 text-xs">
-                                {resultadoImportacion.errores.slice(0, 10).map((error, idx) => (
-                                  <div key={idx} className="text-yellow-800">
-                                    Fila {error.fila}: {error.error} (Convenio: {error.cod_tercero})
-                                  </div>
-                                ))}
-                                {resultadoImportacion.errores.length > 10 && (
-                                  <div className="text-yellow-700 font-medium">
-                                    ... y {resultadoImportacion.errores.length - 10} más
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+            {/* Información del archivo */}
+            {archivoSeleccionado && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Nombre del archivo</p>
+                    <p className="font-semibold text-gray-900">{archivoSeleccionado.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Tamaño</p>
+                    <p className="font-semibold text-gray-900">
+                      {(archivoSeleccionado.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Período</p>
+                    <p className="font-semibold text-gray-900">
+                      {mesDetectado && anioDetectado
+                        ? formatMesAnio(mesDetectado, anioDetectado)
+                        : 'No detectado'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total de registros</p>
+                    <p className="font-semibold text-gray-900">{totalRegistrosExcel}</p>
                   </div>
                 </div>
 
-                {/* Botón cerrar */}
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleCerrarModalImportacion}
-                    className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
-                  >
-                    Cerrar
-                  </Button>
+                {/* Alerta de advertencia si el mes no es el actual */}
+                {mostrarAdvertenciaFecha && mesDetectado && anioDetectado && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-yellow-900 mb-1">Advertencia: Mes diferente</h4>
+                      <p className="text-sm text-yellow-800">
+                        El archivo contiene registros del período <strong>{formatMesAnio(mesDetectado, anioDetectado)}</strong>
+                        , pero el mes actual es <strong>{formatMesAnio(moment.tz('America/Guayaquil').month() + 1, moment.tz('America/Guayaquil').year())}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-amber-900 mb-1">Advertencia de re-subida</h4>
+                    <p className="text-sm text-amber-800">
+                      Al subir este archivo, si luego intentas volver a cargarlo con el mismo nombre, el sistema puede rechazarlo por política de importación.
+                    </p>
+                  </div>
                 </div>
-              </>
+
+                {hayCodigosDuplicados && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-red-900 mb-1">Duplicados detectados</h4>
+                      <p className="text-sm text-red-800">
+                        Existen códigos de tercero duplicados en el archivo. Al subir, esas filas duplicadas no se cargarán; solo se procesarán las demás.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* Vista previa de datos con validaciones */}
+            {datosPreview && datosPreview.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Validaciones por fila ({totalRegistrosExcel} registros)
+                </h4>
+                <div className="border rounded-lg overflow-x-auto max-h-[40vh] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 border-b sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-12">Fila</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Estado</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Código de Tercero</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-700">Fecha Transmisión</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-700 w-12">Validación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {datosPreview.map((fila, idx) => {
+                        const validacion = validacionesPreview[idx];
+                        const esValida = validacion?.valida ?? true;
+                        const tieneErrores = validacion?.errores?.length > 0;
+
+                        return (
+                          <React.Fragment key={idx}>
+                            <tr className={`border-b ${tieneErrores ? 'bg-red-50' : 'bg-white'}`}>
+                              <td className="px-3 py-2 text-center text-gray-600 font-medium">{validacion?.fila_numero || fila.fila_numero || idx + 2}</td>
+                              <td className="px-3 py-2 text-gray-900">{fila.estado || '-'}</td>
+                              <td className="px-3 py-2 text-gray-900">{fila.cod_tercero || '-'}</td>
+                              <td className="px-3 py-2 text-gray-900">{fila.fecha_transmision || '-'}</td>
+                              <td className="px-3 py-2 text-center">
+                                {esValida ? (
+                                  <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 rounded-full">
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center w-6 h-6 bg-red-100 rounded-full">
+                                    <X className="h-4 w-4 text-red-600" />
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                            {tieneErrores && (
+                              <tr className="bg-red-50 border-b">
+                                <td colSpan={5} className="px-3 py-2">
+                                  <div className="text-sm text-red-700 space-y-1">
+                                    {validacion.errores.map((error: string, errorIdx: number) => (
+                                      <div key={errorIdx} className="flex items-start gap-2">
+                                        <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                                        <span>{error}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCerrarModalImportacion}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleImportarExcel}
+                disabled={!archivoSeleccionado || importando}
+                className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
+              >
+                {importando ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Subiendo...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Aceptar y subir
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
-      </Dialog>    </div>
+      </Dialog>
+    </div>
   );
 }

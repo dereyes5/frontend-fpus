@@ -277,6 +277,12 @@ export default function BenefactorDetail() {
           <h1 className="text-[#1D1D1D] mb-2 break-words">
             {benefactor.nombre_completo}
           </h1>
+          <div className="inline-flex items-center gap-1 mb-3 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-sm">
+            <span className="font-semibold text-[#1b76b9]">Cargado por:</span>
+            <span className="text-[#1D1D1D] font-medium break-all">
+              {benefactor.nombre_usuario_carga || 'No disponible'}
+            </span>
+          </div>
           {benefactor.tipo_benefactor === 'DEPENDIENTE' && titular && (
             <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
               <UserCheck className="h-4 w-4 text-blue-500" />
@@ -466,6 +472,15 @@ export default function BenefactorDetail() {
               <p className="text-sm text-gray-600 mb-1">Tipo de Afiliación</p>
               <p className="text-[#1D1D1D]">{benefactor.tipo_afiliacion || 'No especificado'}</p>
             </div>
+            {benefactor.tipo_afiliacion?.toLowerCase() === 'corporativo' && benefactor.corporacion && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Corporación</p>
+                  <p className="text-[#1D1D1D]">{benefactor.corporacion}</p>
+                </div>
+              </>
+            )}
             {(benefactor.cuenta || benefactor.banco_emisor) && (
               <>
                 <Separator />

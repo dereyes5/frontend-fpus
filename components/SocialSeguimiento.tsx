@@ -47,6 +47,18 @@ function badgePrioridad(prioridad?: string) {
   return "bg-gray-500 text-white";
 }
 
+const API_BASE = "http://154.12.234.100:3000";
+
+function buildSeguimientoFileUrl(rutaArchivo?: string) {
+  if (!rutaArchivo) return "";
+  const normalized = rutaArchivo.split("/").map(encodeURIComponent).join("/");
+  return `${API_BASE}/uploads/seguimiento/${normalized}`;
+}
+
+function isPdf(nombre?: string) {
+  return (nombre || "").toLowerCase().endsWith(".pdf");
+}
+
 export default function SocialSeguimiento() {
   const { permisos } = useAuth();
   const puedeEscribir = permisos?.social_escritura ?? false;
@@ -389,11 +401,36 @@ export default function SocialSeguimiento() {
                 {Array.isArray(seg.fotos) && seg.fotos.length > 0 && (
                   <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 p-3">
                     <p className="text-xs font-medium text-gray-700 mb-2">Adjuntos ({seg.fotos.length})</p>
-                    <div className="space-y-1">
+                    <div className="space-y-3">
                       {seg.fotos.map((foto) => (
-                        <p key={foto.id_foto} className="text-xs text-gray-600 truncate">
-                          {foto.nombre_archivo}
-                        </p>
+                        <div key={foto.id_foto} className="rounded-md border border-gray-200 bg-white p-2">
+                          <p className="text-xs text-gray-700 truncate mb-2">{foto.nombre_archivo}</p>
+                          {isPdf(foto.nombre_archivo) ? (
+                            <a
+                              href={buildSeguimientoFileUrl(foto.ruta_archivo)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center px-3 py-1.5 rounded-md bg-[#1b76b9] hover:bg-[#155a8a] text-white text-xs"
+                              download
+                            >
+                              Descargar PDF
+                            </a>
+                          ) : (
+                            <a
+                              href={buildSeguimientoFileUrl(foto.ruta_archivo)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block"
+                            >
+                              <img
+                                src={buildSeguimientoFileUrl(foto.ruta_archivo)}
+                                alt={foto.nombre_archivo}
+                                className="w-full max-w-[280px] rounded border border-gray-200 object-cover"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

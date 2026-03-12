@@ -11,8 +11,37 @@ import type {
 // BENEFICIARIOS SOCIALES
 // ==========================================
 
-export const crearCasoSocial = async (data: Partial<BeneficiarioSocial>) => {
-  const response = await api.post('/social/beneficiarios', data);
+export const crearCasoSocial = async (
+  data: Partial<BeneficiarioSocial>,
+  archivos?: {
+    fichaPdf?: File | null;
+    firma?: File | null;
+  }
+) => {
+  const formData = new FormData();
+
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === 'object') {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+    formData.append(key, String(value));
+  });
+
+  if (archivos?.fichaPdf) {
+    formData.append('ficha_pdf', archivos.fichaPdf);
+  }
+
+  if (archivos?.firma) {
+    formData.append('firma', archivos.firma);
+  }
+
+  const response = await api.post('/social/beneficiarios', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
   return response.data;
 };
 
