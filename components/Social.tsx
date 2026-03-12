@@ -243,14 +243,33 @@ export default function Social() {
   const [countryOpen, setCountryOpen] = useState(false);
 
   const countryOptions = useState(() => {
-    const regionCodes: string[] = typeof (Intl as any).supportedValuesOf === "function"
-      ? (Intl as any).supportedValuesOf("region")
-      : ["EC", "CO", "PE", "CL", "AR", "UY", "PY", "BO", "MX", "US", "ES", "IT", "FR", "DE"];
-    const regionNames = new Intl.DisplayNames(["es"], { type: "region" });
+    const fallbackRegionCodes = ["EC", "CO", "PE", "CL", "AR", "UY", "PY", "BO", "MX", "US", "ES", "IT", "FR", "DE"];
+
+    let regionCodes: string[] = fallbackRegionCodes;
+    if (typeof (Intl as any).supportedValuesOf === "function") {
+      try {
+        const codes = (Intl as any).supportedValuesOf("region");
+        if (Array.isArray(codes) && codes.length > 0) {
+          regionCodes = codes;
+        }
+      } catch {
+        regionCodes = fallbackRegionCodes;
+      }
+    }
+
+    let regionNames: Intl.DisplayNames | null = null;
+    if (typeof Intl.DisplayNames === "function") {
+      try {
+        regionNames = new Intl.DisplayNames(["es"], { type: "region" });
+      } catch {
+        regionNames = null;
+      }
+    }
+
     return regionCodes
       .map((code) => ({
         code,
-        name: normalizeUpperAsciiText(regionNames.of(code) || code),
+        name: normalizeUpperAsciiText(regionNames?.of(code) || code),
       }))
       .filter((item) => item.name && item.name.length > 1)
       .sort((a, b) => a.name.localeCompare(b.name));
