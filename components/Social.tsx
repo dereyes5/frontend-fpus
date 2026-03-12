@@ -403,7 +403,16 @@ export default function Social() {
       discapacidad_detalle: nuevoCaso.discapacidad === "SI" ? (nuevoCaso.discapacidad_detalle || undefined) : undefined,
       con_quien_vive: nuevoCaso.con_quien_vive || undefined,
       con_quien_vive_detalle: nuevoCaso.con_quien_vive_detalle || undefined,
-      relaciones_familiares: nuevoCaso.relaciones_familiares.filter((r: any) => r.nombre_familiar?.trim().length > 0),
+      relaciones_familiares: nuevoCaso.relaciones_familiares
+        .map((r: any, idx: number) => ({
+          orden: idx + 1,
+          nombre_familiar: (r.nombre_familiar || "").trim(),
+          forma_convivencia: (r.forma_convivencia === "PERMANENTE" ? "PERMANENTE" : "OCASIONAL") as "OCASIONAL" | "PERMANENTE",
+          edad: r.edad ? Number(r.edad) : undefined,
+          cedula: r.cedula || undefined,
+          telefono: r.telefono || undefined,
+        }))
+        .filter((r) => r.nombre_familiar.length > 0),
       situacion_vivienda: {
         vivienda_reside: nuevoCaso.vivienda_reside,
         barreras: nuevoCaso.vivienda_barreras,
