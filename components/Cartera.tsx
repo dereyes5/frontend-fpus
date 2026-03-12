@@ -216,7 +216,7 @@ export default function Cartera() {
         }
 
         // Intentar leer como Excel
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true, defval: '' });
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
         // Validar que hay al menos una hoja
         if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
@@ -232,7 +232,7 @@ export default function Cartera() {
           return;
         }
 
-        const filas = XLSX.utils.sheet_to_json(hoja, { defval: null, blankrows: false });
+        const filas = XLSX.utils.sheet_to_json<Record<string, unknown>>(hoja, { defval: null, blankrows: false });
 
         // Validar que hay datos
         if (!filas || filas.length === 0) {
@@ -309,7 +309,7 @@ export default function Cartera() {
 
         if (colFecha) {
           // Extraer mes/año de las fechas
-          filas.forEach((fila: any) => {
+          filas.forEach((fila) => {
             const valorFecha = fila[colFecha];
             if (valorFecha !== null && valorFecha !== undefined && valorFecha !== '') {
               const fecha = parsearFechaExcel(valorFecha);
@@ -360,7 +360,12 @@ export default function Cartera() {
           c.toLowerCase().includes('fecha') && c.toLowerCase().includes('transmision')
         );
 
-        const preview = filas.map((fila: any, idx: number) => ({
+        if (!colEstado || !colCodTercero || !colFechaTrans) {
+          toast.error('No se detectaron columnas obligatorias para el preview: estado, cod_tercero, fecha_transmision');
+          return;
+        }
+
+        const preview = filas.map((fila, idx: number) => ({
           fila_numero: idx + 2,
           estado: fila[colEstado] || '-',
           cod_tercero: fila[colCodTercero] || '-',
@@ -375,7 +380,7 @@ export default function Cartera() {
 
         // Detectar códigos de tercero duplicados entre filas (case-insensitive)
         const filasPorCodTercero = new Map<string, number[]>();
-        filas.forEach((fila: any, idx: number) => {
+        filas.forEach((fila, idx: number) => {
           const cod = fila[colCodTercero]?.toString().trim();
           if (!cod) return;
           const codNormalizado = cod.toUpperCase();
@@ -385,8 +390,8 @@ export default function Cartera() {
         });
 
         const codigosPreview = filas
-          .map((fila: any) => fila[colCodTercero]?.toString().trim())
-          .filter(Boolean);
+          .map((fila) => fila[colCodTercero]?.toString().trim())
+          .filter((value): value is string => Boolean(value));
 
         let codigosYaAportados = new Map<string, { nombre_completo?: string; fecha_transmision?: string }>();
         try {
@@ -406,7 +411,7 @@ export default function Cartera() {
           console.error('Error validando preview contra datos existentes:', error);
         }
 
-        const validacionesPorFila = filas.map((fila: any, idx: number) => {
+        const validacionesPorFila = filas.map((fila, idx: number) => {
           const errores: string[] = [];
 
           // Validar estado
