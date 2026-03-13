@@ -76,6 +76,18 @@ export const benefactoresService = {
     return response.data;
   },
 
+  // Obtener sugerencias de corporaciones ya registradas
+  async getCorporacionesSugeridas(query: string, limit = 8): Promise<ApiResponse<string[]>> {
+    const params = new URLSearchParams();
+    params.append('q', query);
+    params.append('limit', limit.toString());
+
+    const response = await api.get<ApiResponse<string[]>>(
+      `/benefactores/corporaciones/sugerencias?${params.toString()}`
+    );
+    return response.data;
+  },
+
   // Subir contrato PDF
   async subirContrato(id: number, file: File): Promise<ApiResponse<{ filename: string; path: string }>> {
     const formData = new FormData();

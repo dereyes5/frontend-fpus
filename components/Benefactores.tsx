@@ -148,6 +148,8 @@ export default function Benefactores() {
   const [tipoCuenta, setTipoCuenta] = useState("");
   const [bancoEmisor, setBancoEmisor] = useState("");
   const [corporacion, setCorporacion] = useState("");
+  const [corporacionesSugeridas, setCorporacionesSugeridas] = useState<string[]>([]);
+  const [cargandoCorporaciones, setCargandoCorporaciones] = useState(false);
   const [observacion, setObservacion] = useState("");
 
   const [guardando, setGuardando] = useState(false);
@@ -177,6 +179,7 @@ export default function Benefactores() {
   const [contratoError, setContratoError] = useState<string>("");
   const [subiendoContrato, setSubiendoContrato] = useState(false);
   const fileInputContratoRef = useRef<HTMLInputElement>(null);
+  const busquedaCorporacionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const MAX_PDF_MB = 10;
 
   const limpiarContrato = () => {
@@ -230,6 +233,43 @@ export default function Benefactores() {
     loadBenefactores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (busquedaCorporacionRef.current) {
+      clearTimeout(busquedaCorporacionRef.current);
+    }
+
+    if (tipoAfiliacion !== "corporativo") {
+      setCorporacionesSugeridas([]);
+      setCargandoCorporaciones(false);
+      return;
+    }
+
+    const termino = corporacion.trim();
+    if (termino.length < 2) {
+      setCorporacionesSugeridas([]);
+      setCargandoCorporaciones(false);
+      return;
+    }
+
+    busquedaCorporacionRef.current = setTimeout(async () => {
+      try {
+        setCargandoCorporaciones(true);
+        const response = await benefactoresService.getCorporacionesSugeridas(termino);
+        setCorporacionesSugeridas(response.data);
+      } catch {
+        setCorporacionesSugeridas([]);
+      } finally {
+        setCargandoCorporaciones(false);
+      }
+    }, 250);
+
+    return () => {
+      if (busquedaCorporacionRef.current) {
+        clearTimeout(busquedaCorporacionRef.current);
+      }
+    };
+  }, [corporacion, tipoAfiliacion]);
 
   const sugerirSiguienteConvenio = (lista: Benefactor[]): string => {
     const ultimo = lista.find((b) => typeof b.n_convenio === "string" && /\d/.test(b.n_convenio));
@@ -295,6 +335,8 @@ export default function Benefactores() {
     setTipoCuenta("");
     setBancoEmisor("");
     setCorporacion("");
+    setCorporacionesSugeridas([]);
+    setCargandoCorporaciones(false);
     setObservacion("");
     setTipoBenefactor("TITULAR");
     setTipoAfiliacion("individual");
@@ -787,6 +829,7 @@ export default function Benefactores() {
                       setTipoAfiliacion(value);
                       if (value === "individual") {
                         setCorporacion("");
+                        setCorporacionesSugeridas([]);
                       }
                     }}
                     disabled={guardando || subiendoContrato}
@@ -868,13 +911,31 @@ export default function Benefactores() {
                 {tipoAfiliacion === "corporativo" && (
                   <div className="space-y-2">
                     <Label htmlFor="corporacion">Corporación</Label>
-                    <Input
-                      id="corporacion"
-                      placeholder="Ingrese nombre de la corporación"
-                      value={corporacion}
-                      onChange={(e) => setCorporacion(e.target.value.toUpperCase())}
-                      disabled={guardando || subiendoContrato}
-                    />
+                    <div className="space-y-1">
+                      <Input
+                        id="corporacion"
+                        list="corporaciones-sugeridas"
+                        placeholder="Ingrese nombre de la corporación"
+                        value={corporacion}
+                        onChange={(e) => setCorporacion(e.target.value.toUpperCase())}
+                        disabled={guardando || subiendoContrato}
+                        autoComplete="off"
+                      />
+                      <datalist id="corporaciones-sugeridas">
+                        {corporacionesSugeridas.map((opcion) => (
+                          <option key={opcion} value={opcion} />
+                        ))}
+                      </datalist>
+                      {corporacion.trim().length >= 2 && (
+                        <p className="text-xs text-gray-500">
+                          {cargandoCorporaciones
+                            ? "Buscando corporaciones parecidas..."
+                            : corporacionesSugeridas.length > 0
+                              ? `Sugerencias encontradas: ${corporacionesSugeridas.join(", ")}`
+                              : "No hay coincidencias guardadas todavia."}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
