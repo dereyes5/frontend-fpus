@@ -116,7 +116,7 @@ const provinciasSelector = Object.keys(ciudadesPorProvincia);
 
 export default function Benefactores() {
   const { permisos } = useAuth();
-  const puedeEditar = permisos?.benefactores_escritura ?? false;
+  const puedeGestionar = (permisos?.benefactores_ingresar ?? false) || (permisos?.benefactores_administrar ?? false);
 
   const [benefactores, setBenefactores] = useState<Benefactor[]>([]);
 
@@ -611,7 +611,7 @@ export default function Benefactores() {
           <p className="text-white/90">Gestión de benefactores titulares y dependientes</p>
         </div>
 
-        {puedeEditar ? (
+        {puedeGestionar ? (
           <Dialog
             open={isDialogOpen}
             onOpenChange={(open) => {
@@ -1173,9 +1173,7 @@ export default function Benefactores() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        ) : (
-          <div className="text-white/90 text-sm">Modo administrador: solo lectura</div>
-        )}
+        ) : null}
       </div>
 
       {/* Stats */}

@@ -11,10 +11,10 @@ export interface Usuario {
 export interface PermisosGranulares {
   cartera_lectura: boolean;
   cartera_escritura: boolean;
-  benefactores_lectura: boolean;
-  benefactores_escritura: boolean;
-  social_lectura: boolean;
-  social_escritura: boolean;
+  benefactores_ingresar: boolean;
+  benefactores_administrar: boolean;
+  social_ingresar: boolean;
+  social_administrar: boolean;
   configuraciones: boolean;
   aprobaciones: boolean;
   aprobaciones_social: boolean;

@@ -222,8 +222,8 @@ function MapaSelector({
 export default function Social() {
   const navigate = useNavigate();
   const { permisos } = useAuth();
-  const puedeLeer = permisos?.social_lectura ?? false;
-  const puedeEscribir = permisos?.social_escritura ?? false;
+  const puedeLeer = (permisos?.social_ingresar ?? false) || (permisos?.social_administrar ?? false);
+  const puedeEscribir = puedeLeer;
 
   const [casos, setCasos] = useState<CasoSocialUI[]>([]);
   const [loadingCasos, setLoadingCasos] = useState(false);
@@ -550,7 +550,7 @@ export default function Social() {
           <p className="text-gray-600">Gestion de casos sociales y seguimiento</p>
         </div>
         <div className="flex gap-2">
-          <ProtectedAction permiso="social_escritura">
+          <ProtectedAction permiso={["social_ingresar", "social_administrar"]}>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white">

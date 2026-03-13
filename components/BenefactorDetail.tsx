@@ -21,7 +21,7 @@ export default function BenefactorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { permisos } = useAuth();
-  const puedeEditar = permisos?.benefactores_escritura ?? false;
+  const puedeEditar = (permisos?.benefactores_ingresar ?? false) || (permisos?.benefactores_administrar ?? false);
   const [benefactor, setBenefactor] = useState<Benefactor | null>(null);
   const [historialPagos, setHistorialPagos] = useState<HistorialPago[]>([]);
   const [saldo, setSaldo] = useState<SaldoBenefactor | null>(null);
@@ -666,7 +666,7 @@ export default function BenefactorDetail() {
               </Dialog>
               {!puedeEditar && (
                 <p className="text-sm text-gray-600">
-                  Modo administrador: solo lectura (no puedes subir/cambiar contratos)
+                  No tienes permisos para subir o cambiar contratos en este registro.
                 </p>
               )}
             </div>

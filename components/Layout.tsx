@@ -138,36 +138,36 @@ export default function Layout() {
       path: "/benefactores",
       label: "Benefactores",
       icon: Users,
-      requiredPermission: "benefactores_lectura"
+      requiredPermissions: ["benefactores_ingresar", "benefactores_administrar"]
     },
     {
       path: "/aprobaciones",
       label: "Aprobaciones",
       icon: CheckSquare,
-      requiredPermission: "aprobaciones",
+      requiredPermissions: ["aprobaciones", "aprobaciones_social"],
       submenu: [
-        { path: "/aprobaciones/benefactores", label: "Aprobaciones Benefactores", requiredPermission: "aprobaciones" },
-        { path: "/aprobaciones/social", label: "Aprobaciones Social", requiredPermission: "aprobaciones_social" },
+        { path: "/aprobaciones/benefactores", label: "Aprobaciones Benefactores", requiredPermissions: ["aprobaciones"] },
+        { path: "/aprobaciones/social", label: "Aprobaciones Social", requiredPermissions: ["aprobaciones_social"] },
       ]
     },
-    { path: "/cartera", label: "Cartera", icon: Wallet, requiredPermission: "cartera_lectura" },
+    { path: "/cartera", label: "Cartera", icon: Wallet, requiredPermissions: ["cartera_lectura"] },
     {
       path: "/social",
       label: "Social",
       icon: Heart,
-      requiredPermission: "social_lectura",
+      requiredPermissions: ["social_ingresar", "social_administrar"],
       submenu: [
-        { path: "/social", label: "Gestion de Casos", requiredPermission: "social_lectura" },
-        { path: "/social/seguimiento", label: "Seguimiento", requiredPermission: "social_lectura" },
+        { path: "/social", label: "Gestion de Casos", requiredPermissions: ["social_ingresar", "social_administrar"] },
+        { path: "/social/seguimiento", label: "Seguimiento", requiredPermissions: ["social_ingresar", "social_administrar"] },
       ]
     },
-    { path: "/configuracion", label: "Configuracion", icon: Settings, requiredPermission: "configuraciones" },
+    { path: "/configuracion", label: "Configuracion", icon: Settings, requiredPermissions: ["configuraciones"] },
   ];
 
   // Filtrar elementos del menu segun permisos del usuario
   const visibleMenuItems = menuItems.filter(item => {
     // Dashboard siempre visible
-    if (!item.requiredPermission) return true;
+    if (!item.requiredPermissions) return true;
 
     // Si no hay permisos, no mostrar nada
     if (!permisos) return false;
@@ -175,12 +175,11 @@ export default function Layout() {
     // Si tiene submenu, verificar si al menos uno de los subitems es visible
     if (item.submenu) {
       return item.submenu.some((subitem: any) =>
-        permisos[subitem.requiredPermission as keyof typeof permisos] === true
+        subitem.requiredPermissions.some((permission: string) => permisos[permission as keyof typeof permisos] === true)
       );
     }
 
-    // Verificar si el usuario tiene el permiso requerido
-    return permisos[item.requiredPermission as keyof typeof permisos] === true;
+    return item.requiredPermissions.some((permission: string) => permisos[permission as keyof typeof permisos] === true);
   });
 
   const toggleMenu = (label: string) => {
@@ -326,7 +325,7 @@ export default function Layout() {
               // Filtrar subitems visibles segun permisos
               const visibleSubitems = hasSubmenu
                 ? item.submenu.filter((subitem: any) =>
-                  !permisos || permisos[subitem.requiredPermission as keyof typeof permisos] === true
+                  !permisos || subitem.requiredPermissions.some((permission: string) => permisos[permission as keyof typeof permisos] === true)
                 )
                 : [];
 

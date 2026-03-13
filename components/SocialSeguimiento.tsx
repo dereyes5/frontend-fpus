@@ -61,8 +61,8 @@ function isPdf(nombre?: string) {
 
 export default function SocialSeguimiento() {
   const { permisos } = useAuth();
-  const puedeEscribir = permisos?.social_escritura ?? false;
-  const puedeLeer = permisos?.social_lectura ?? false;
+  const puedeLeer = (permisos?.social_ingresar ?? false) || (permisos?.social_administrar ?? false);
+  const puedeEscribir = puedeLeer;
 
   const [casos, setCasos] = useState<BeneficiarioSocial[]>([]);
   const [loadingCasos, setLoadingCasos] = useState(false);
@@ -274,7 +274,7 @@ export default function SocialSeguimiento() {
         </CardContent>
       </Card>
 
-      <ProtectedAction permiso="social_escritura">
+      <ProtectedAction permiso={["social_ingresar", "social_administrar"]}>
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between gap-3">

@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [permisos?.benefactores_lectura, permisos?.cartera_lectura, permisos?.aprobaciones]);
+  }, [permisos?.benefactores_ingresar, permisos?.benefactores_administrar, permisos?.cartera_lectura, permisos?.aprobaciones]);
 
   const loadDashboardData = async () => {
     try {
@@ -44,7 +44,7 @@ export default function Dashboard() {
       const promises: Promise<any>[] = [];
 
       // Siempre cargar benefactores si tiene permiso de lectura
-      if (permisos?.benefactores_lectura) {
+      if (permisos?.benefactores_ingresar || permisos?.benefactores_administrar) {
         promises.push(
           benefactoresService.getBenefactores({ page: 1, limit: 1 })
             .then(res => ({ type: 'benefactores', data: res.pagination?.total || 0 }))
@@ -145,7 +145,7 @@ export default function Dashboard() {
       change: "Registros activos en el sistema",
       icon: Users,
       color: "bg-blue-500",
-      show: permisos?.benefactores_lectura,
+      show: permisos?.benefactores_ingresar || permisos?.benefactores_administrar,
     },
     {
       title: "Recaudado Este Mes",
@@ -179,7 +179,7 @@ export default function Dashboard() {
       icon: Users,
       color: "bg-[#4064E3] hover:bg-[#3451C2]",
       path: "/benefactores",
-      show: permisos?.benefactores_lectura,
+      show: permisos?.benefactores_ingresar || permisos?.benefactores_administrar,
     },
     {
       label: "Revisar aprobaciones",

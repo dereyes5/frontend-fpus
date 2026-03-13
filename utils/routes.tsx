@@ -28,11 +28,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "benefactores",
-        element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><Benefactores /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["benefactores_ingresar", "benefactores_administrar"]}><Benefactores /></ProtectedRoute>
       },
       {
         path: "benefactores/:id",
-        element: <ProtectedRoute requiredPermissions={["benefactores_lectura"]}><BenefactorDetail /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["benefactores_ingresar", "benefactores_administrar"]}><BenefactorDetail /></ProtectedRoute>
       },
       {
         path: "aprobaciones",
@@ -48,11 +48,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "social",
-        element: <ProtectedRoute requiredPermissions={["social_lectura"]}><Social /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["social_ingresar", "social_administrar"]}><Social /></ProtectedRoute>
       },
       {
         path: "social/seguimiento",
-        element: <ProtectedRoute requiredPermissions={["social_lectura"]}><SocialSeguimiento /></ProtectedRoute>
+        element: <ProtectedRoute requiredPermissions={["social_ingresar", "social_administrar"]}><SocialSeguimiento /></ProtectedRoute>
       },
       {
         path: "aprobaciones/social",

@@ -4,18 +4,19 @@ import { PermisosGranulares } from '../types';
 
 interface ProtectedActionProps {
   children: ReactNode;
-  permiso: keyof PermisosGranulares; // Permiso específico requerido
+  permiso: keyof PermisosGranulares | Array<keyof PermisosGranulares>;
   fallback?: ReactNode;
 }
 
-export const ProtectedAction = ({ 
-  children, 
+export const ProtectedAction = ({
+  children,
   permiso,
-  fallback = null 
+  fallback = null
 }: ProtectedActionProps) => {
   const { permisos } = useAuth();
+  const permisosRequeridos = Array.isArray(permiso) ? permiso : [permiso];
 
-  if (!permisos || !permisos[permiso]) {
+  if (!permisos || !permisosRequeridos.some((permisoActual) => permisos[permisoActual])) {
     return <>{fallback}</>;
   }
 

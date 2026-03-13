@@ -328,10 +328,10 @@ export default function Configuracion() {
       const permisosBase = usuario.permisos || {
         cartera_lectura: false,
         cartera_escritura: false,
-        benefactores_lectura: false,
-        benefactores_escritura: false,
-        social_lectura: false,
-        social_escritura: false,
+        benefactores_ingresar: false,
+        benefactores_administrar: false,
+        social_ingresar: false,
+        social_administrar: false,
         configuraciones: false,
         aprobaciones: false,
         aprobaciones_social: false,
@@ -341,15 +341,31 @@ export default function Configuracion() {
       const permisosActualizados = {
         cartera_lectura: permisosBase.cartera_lectura ?? false,
         cartera_escritura: permisosBase.cartera_escritura ?? false,
-        benefactores_lectura: permisosBase.benefactores_lectura ?? false,
-        benefactores_escritura: permisosBase.benefactores_escritura ?? false,
-        social_lectura: permisosBase.social_lectura ?? false,
-        social_escritura: permisosBase.social_escritura ?? false,
+        benefactores_ingresar: permisosBase.benefactores_ingresar ?? false,
+        benefactores_administrar: permisosBase.benefactores_administrar ?? false,
+        social_ingresar: permisosBase.social_ingresar ?? false,
+        social_administrar: permisosBase.social_administrar ?? false,
         configuraciones: permisosBase.configuraciones ?? false,
         aprobaciones: permisosBase.aprobaciones ?? false,
         aprobaciones_social: permisosBase.aprobaciones_social ?? false,
         [permiso]: !valorActual, // Toggle el permiso especifico
       };
+
+      if (permiso === "benefactores_administrar" && !valorActual) {
+        permisosActualizados.benefactores_ingresar = true;
+      }
+
+      if (permiso === "benefactores_ingresar" && valorActual) {
+        permisosActualizados.benefactores_administrar = false;
+      }
+
+      if (permiso === "social_administrar" && !valorActual) {
+        permisosActualizados.social_ingresar = true;
+      }
+
+      if (permiso === "social_ingresar" && valorActual) {
+        permisosActualizados.social_administrar = false;
+      }
 
       await authService.actualizarPermisos(usuarioId, permisosActualizados);
 
@@ -895,102 +911,102 @@ export default function Configuracion() {
                               </div>
                             </div>
 
-                            {/* Benefactores Lectura */}
+                            {/* Benefactores Ingresar */}
                             <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
                               <Checkbox
-                                id={`usuario-${usuario.id_usuario}-benefactores_lectura`}
-                                checked={usuario.permisos?.benefactores_lectura ?? false}
+                                id={`usuario-${usuario.id_usuario}-benefactores_ingresar`}
+                                checked={usuario.permisos?.benefactores_ingresar ?? false}
                                 onCheckedChange={() => togglePermiso(
                                   usuario.id_usuario,
-                                  'benefactores_lectura',
-                                  usuario.permisos?.benefactores_lectura ?? false
+                                  'benefactores_ingresar',
+                                  usuario.permisos?.benefactores_ingresar ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
                               />
                               <div className="flex-1">
                                 <label
-                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_lectura`}
+                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_ingresar`}
                                   className="text-sm font-medium leading-none cursor-pointer"
                                 >
-                                  Benefactores (Lectura)
+                                  Benefactores (Ingresar)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Ver informacion de benefactores
+                                  Ver, crear y editar solo los benefactores propios
                                 </p>
                               </div>
                             </div>
 
-                            {/* Benefactores Escritura */}
+                            {/* Benefactores Administrar */}
                             <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
                               <Checkbox
-                                id={`usuario-${usuario.id_usuario}-benefactores_escritura`}
-                                checked={usuario.permisos?.benefactores_escritura ?? false}
+                                id={`usuario-${usuario.id_usuario}-benefactores_administrar`}
+                                checked={usuario.permisos?.benefactores_administrar ?? false}
                                 onCheckedChange={() => togglePermiso(
                                   usuario.id_usuario,
-                                  'benefactores_escritura',
-                                  usuario.permisos?.benefactores_escritura ?? false
+                                  'benefactores_administrar',
+                                  usuario.permisos?.benefactores_administrar ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
                               />
                               <div className="flex-1">
                                 <label
-                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_escritura`}
+                                  htmlFor={`usuario-${usuario.id_usuario}-benefactores_administrar`}
                                   className="text-sm font-medium leading-none cursor-pointer"
                                 >
-                                  Benefactores (Escritura)
+                                  Benefactores (Administrar)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Crear y editar benefactores
+                                  Ver, crear y editar todos los benefactores del sistema
                                 </p>
                               </div>
                             </div>
 
-                            {/* Social Lectura */}
+                            {/* Social Ingresar */}
                             <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
                               <Checkbox
-                                id={`usuario-${usuario.id_usuario}-social_lectura`}
-                                checked={usuario.permisos?.social_lectura ?? false}
+                                id={`usuario-${usuario.id_usuario}-social_ingresar`}
+                                checked={usuario.permisos?.social_ingresar ?? false}
                                 onCheckedChange={() => togglePermiso(
                                   usuario.id_usuario,
-                                  'social_lectura',
-                                  usuario.permisos?.social_lectura ?? false
+                                  'social_ingresar',
+                                  usuario.permisos?.social_ingresar ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
                               />
                               <div className="flex-1">
                                 <label
-                                  htmlFor={`usuario-${usuario.id_usuario}-social_lectura`}
+                                  htmlFor={`usuario-${usuario.id_usuario}-social_ingresar`}
                                   className="text-sm font-medium leading-none cursor-pointer"
                                 >
-                                  Social (Lectura)
+                                  Social (Ingresar)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Ver informacion del modulo social
+                                  Ver, crear y editar solo los casos y seguimientos propios
                                 </p>
                               </div>
                             </div>
 
-                            {/* Social Escritura */}
+                            {/* Social Administrar */}
                             <div className="flex items-start space-x-3 p-3 bg-white rounded border border-gray-200">
                               <Checkbox
-                                id={`usuario-${usuario.id_usuario}-social_escritura`}
-                                checked={usuario.permisos?.social_escritura ?? false}
+                                id={`usuario-${usuario.id_usuario}-social_administrar`}
+                                checked={usuario.permisos?.social_administrar ?? false}
                                 onCheckedChange={() => togglePermiso(
                                   usuario.id_usuario,
-                                  'social_escritura',
-                                  usuario.permisos?.social_escritura ?? false
+                                  'social_administrar',
+                                  usuario.permisos?.social_administrar ?? false
                                 )}
                                 disabled={updatingPermisos === usuario.id_usuario}
                               />
                               <div className="flex-1">
                                 <label
-                                  htmlFor={`usuario-${usuario.id_usuario}-social_escritura`}
+                                  htmlFor={`usuario-${usuario.id_usuario}-social_administrar`}
                                   className="text-sm font-medium leading-none cursor-pointer"
                                 >
-                                  Social (Escritura)
+                                  Social (Administrar)
                                 </label>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Editar informacion del modulo social
+                                  Ver, crear y editar todos los casos y seguimientos del sistema
                                 </p>
                               </div>
                             </div>
