@@ -70,8 +70,24 @@ export interface Recurso {
 // Tipos de benefactores
 export type TipoBenefactor = 'TITULAR' | 'DEPENDIENTE';
 export type EstadoRegistro = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
-export type EstadoBenefactor = 'ACTIVO' | 'INACTIVO';
+export type EstadoBenefactor = 'ACTIVO' | 'INACTIVO' | 'CANCELADO';
 export type TipoAfiliacion = 'individual' | 'corporativo';
+export type VinculacionCartera = 'cuenta_propia' | 'dependiente_fundacion' | 'grupo_externo';
+
+export interface GrupoCobroExterno {
+  id_grupo_cobro: number;
+  nombre_grupo: string;
+  nombre_titular_externo: string;
+  cedula_titular_externo?: string | null;
+  banco_emisor?: string | null;
+  tipo_cuenta?: string | null;
+  num_cuenta?: string | null;
+  n_convenio_cartera: string;
+  observacion?: string | null;
+  activo: boolean;
+  id_usuario_creacion: number;
+  total_benefactores?: number;
+}
 
 export interface Benefactor {
   id_benefactor: number;
@@ -104,6 +120,11 @@ export interface Benefactor {
   nombre_usuario_carga?: string;
   ejecutivo?: string;
   id_titular?: number;
+  id_grupo_cobro_externo?: number | null;
+  nombre_grupo_cobro_externo?: string | null;
+  n_convenio_cartera?: string | null;
+  nombre_titular_externo?: string | null;
+  cedula_titular_externo?: string | null;
   titular?: {
     nombre_completo: string;
   };
@@ -134,9 +155,11 @@ export interface BenefactorCreateRequest {
   aporte: number;
   observacion?: string;
   estado: EstadoBenefactor;
+  id_grupo_cobro_externo?: number | null;
 }
 
 export interface BenefactorUpdateRequest {
+  tipo_benefactor?: TipoBenefactor;
   tipo_afiliacion?: TipoAfiliacion;
   corporacion?: string;
   nombre_completo?: string;
@@ -149,6 +172,17 @@ export interface BenefactorUpdateRequest {
   estado_civil?: string;
   observacion?: string;
   estado?: EstadoBenefactor;
+  fecha_nacimiento?: string;
+  fecha_suscripcion?: string;
+  mes_prod?: string;
+  inscripcion?: number;
+  aporte?: number;
+  cuenta?: string;
+  num_cuenta_tc?: string;
+  tipo_cuenta?: string;
+  banco_emisor?: string;
+  cedula?: string;
+  id_grupo_cobro_externo?: number | null;
 }
 
 export interface AsignarDependienteRequest {
@@ -261,6 +295,35 @@ export interface HistorialPago {
   estado_aporte: EstadoPagoType;
 }
 
+export interface HistorialAporteMensualItem {
+  id_estado: number;
+  id_benefactor: number;
+  mes: number;
+  anio: number;
+  periodo: string;
+  nombre_completo: string;
+  cedula: string;
+  tipo_benefactor: TipoBenefactor;
+  n_convenio?: string | null;
+  estado_aporte: EstadoPagoType;
+  fecha_transmision?: string | null;
+  fecha_pago?: string | null;
+  fecha_registro?: string | null;
+  valor_cobrado?: string | null;
+  monto_esperado: string;
+  monto_aportado: string;
+}
+
+export interface HistorialAportesSummary {
+  total_benefactores: number;
+  total_registros: number;
+  total_aportados: number;
+  total_no_aportados: number;
+  total_esperado: string;
+  total_recaudado: string;
+  porcentaje_recaudacion: string;
+}
+
 export interface SaldoBenefactor {
   id_benefactor: number;
   nombre_completo: string;
@@ -281,6 +344,7 @@ export interface ApiResponse<T> {
   total?: number;
   mes?: number;
   anio?: number;
+  summary?: unknown;
 }
 
 export interface PaginationInfo {
@@ -466,10 +530,7 @@ export interface BeneficiarioSocial {
   perdida_familiar_detalle?: string;
   observaciones_conclusiones?: string;
   fecha_generacion_ficha?: string;
-  ficha_pdf_nombre?: string;
-  ficha_pdf_ruta?: string;
-  firma_nombre?: string;
-  firma_ruta?: string;
+  documentos?: DocumentoBeneficiarioSocial[];
   relaciones_familiares?: Array<{
     id_relacion_familiar?: number;
     orden: number;
@@ -479,9 +540,8 @@ export interface BeneficiarioSocial {
     cedula?: string;
     telefono?: string;
   }>;
-  tipo_caso: 'Apoyo alimentario' | 'Apoyo médico' | 'Vivienda' | 'Educación' | 'Apoyo psicológico' | 'Otro';
-  prioridad: 'Alta' | 'Media' | 'Baja';
-  estado: 'Activo' | 'En seguimiento' | 'Cerrado';
+  tipo_caso: 'ATENCION_PERMANENTE' | 'ATENCION_NO_PERMANENTE' | 'ATENCIONES_EVENTUALES';
+  estado: 'Activo' | 'Cerrado';
   descripcion_caso: string;
   id_usuario_carga: number;
   fecha_inicio: string;
@@ -511,6 +571,15 @@ export interface SeguimientoSocial {
   fotos?: FotoSeguimiento[];
 }
 
+export interface DocumentoBeneficiarioSocial {
+  id_documento: number;
+  nombre_archivo: string;
+  ruta_archivo: string;
+  mime_type?: string;
+  tipo_documento?: string;
+  fecha_subida: string;
+}
+
 export interface FotoSeguimiento {
   id_foto: number;
   id_seguimiento: number;
@@ -525,9 +594,6 @@ export interface EstadisticasSocial {
     casos_activos: number;
     casos_en_seguimiento: number;
     casos_cerrados: number;
-    prioridad_alta: number;
-    prioridad_media: number;
-    prioridad_baja: number;
     pendientes_aprobacion: number;
     aprobados: number;
     rechazados: number;

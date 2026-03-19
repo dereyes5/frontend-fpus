@@ -14,8 +14,7 @@ import type {
 export const crearCasoSocial = async (
   data: Partial<BeneficiarioSocial>,
   archivos?: {
-    fichaPdf?: File | null;
-    firma?: File | null;
+    documentos?: File[];
   }
 ) => {
   const formData = new FormData();
@@ -29,12 +28,10 @@ export const crearCasoSocial = async (
     formData.append(key, String(value));
   });
 
-  if (archivos?.fichaPdf) {
-    formData.append('ficha_pdf', archivos.fichaPdf);
-  }
-
-  if (archivos?.firma) {
-    formData.append('firma', archivos.firma);
+  if (Array.isArray(archivos?.documentos)) {
+    archivos.documentos.forEach((documento) => {
+      formData.append('documentos', documento);
+    });
   }
 
   const response = await api.post('/social/beneficiarios', formData, {
@@ -48,7 +45,6 @@ export const crearCasoSocial = async (
 export const obtenerCasosSociales = async (filtros?: {
   estado?: string;
   estado_registro?: string;
-  prioridad?: string;
   ciudad?: string;
   tipo_caso?: string;
   id_usuario_carga?: number;

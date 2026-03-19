@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
+﻿import { useState, useEffect, useMemo, useRef, type ChangeEvent } from "react";
 import { Link } from "react-router";
 import { Plus, Search, Eye, Users, User, Upload, FileText, AlertCircle, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown } from "lucide-react";
 import { Button } from "./ui/button";
@@ -6,16 +6,17 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent } from "./ui/card";
 import { Alert, AlertDescription } from "./ui/alert";
 import { benefactoresService } from "../services/benefactores.service";
 import { bancosService } from "../services/bancos.service";
+import { gruposCobroExternoService } from "../services/gruposCobroExterno.service";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
-import type { Benefactor } from "../types";
+import type { Benefactor, GrupoCobroExterno, VinculacionCartera } from "../types";
 import type { Banco } from "../services/bancos.service";
 import {
   useReactTable,
@@ -27,11 +28,11 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 
-/** ====== Provincias (cédula) ====== */
+/** ====== Provincias (cedula) ====== */
 const provinciasEcuadorPorCodigo: Record<string, string> = {
   "01": "Azuay",
-  "02": "Bolívar",
-  "03": "Cañar",
+  "02": "Bolivar",
+  "03": "Canar",
   "04": "Carchi",
   "05": "Cotopaxi",
   "06": "Chimborazo",
@@ -40,18 +41,18 @@ const provinciasEcuadorPorCodigo: Record<string, string> = {
   "09": "Guayas",
   "10": "Imbabura",
   "11": "Loja",
-  "12": "Los Ríos",
-  "13": "Manabí",
+  "12": "Los Rios",
+  "13": "Manabi",
   "14": "Morona Santiago",
   "15": "Napo",
   "16": "Pastaza",
   "17": "Pichincha",
   "18": "Tungurahua",
   "19": "Zamora Chinchipe",
-  "20": "Galápagos",
-  "21": "Sucumbíos",
+  "20": "Galapagos",
+  "21": "Sucumbios",
   "22": "Orellana",
-  "23": "Santo Domingo de los Tsáchilas",
+  "23": "Santo Domingo de los Tsachilas",
   "24": "Santa Elena",
 };
 
@@ -67,7 +68,7 @@ function validarProvincia(cedula: string): boolean {
   return Boolean(provinciasEcuadorPorCodigo[code]);
 }
 
-/** ====== Validación cédula ecuatoriana ====== */
+/** ====== Validacion cedula ecuatoriana ====== */
 function validarCedulaEcuador(cedula: string): boolean {
   if (!/^\d{10}$/.test(cedula)) return false;
 
@@ -92,24 +93,24 @@ function validarCedulaEcuador(cedula: string): boolean {
   return digitoCalculado === verificador;
 }
 
-/** ====== Provincias → Ciudades ====== */
+/** ====== Provincias -> Ciudades ====== */
 const ciudadesPorProvincia: Record<string, string[]> = {
   Pichincha: [
     "Quito",
     "Cayambe",
-    "Mejía",
+    "Mejia",
     "Pedro Moncayo",
     "Pedro Vicente Maldonado",
     "Puerto Quito",
-    "Rumiñahui",
+    "Ruminahui",
     "San Miguel de los Bancos",
   ],
-  Guayas: ["Guayaquil", "Daule", "Durán", "Milagro", "Samborondón", "Playas", "Yaguachi", "Naranjal"],
+  Guayas: ["Guayaquil", "Daule", "Duran", "Milagro", "Samborondon", "Playas", "Yaguachi", "Naranjal"],
   Azuay: ["Cuenca", "Gualaceo", "Paute", "Santa Isabel", "Sigsig"],
-  Tungurahua: ["Ambato", "Baños", "Cevallos", "Mocha", "Patate", "Pelileo", "Píllaro", "Tisaleo"],
-  Manabí: ["Portoviejo", "Manta", "Chone", "Jipijapa", "Montecristi", "Bahía de Caráquez"],
+  Tungurahua: ["Ambato", "Banos", "Cevallos", "Mocha", "Patate", "Pelileo", "Pillaro", "Tisaleo"],
+  "Manabi": ["Portoviejo", "Manta", "Chone", "Jipijapa", "Montecristi", "Bahia de Caraquez"],
   "El Oro": ["Machala", "Pasaje", "Santa Rosa", "Huaquillas", "Arenillas", "El Guabo"],
-  "Santo Domingo de los Tsáchilas": ["Santo Domingo", "La Concordia"],
+  "Santo Domingo de los Tsachilas": ["Santo Domingo", "La Concordia"],
 };
 
 const provinciasSelector = Object.keys(ciudadesPorProvincia);
@@ -117,11 +118,14 @@ const provinciasSelector = Object.keys(ciudadesPorProvincia);
 export default function Benefactores() {
   const { permisos } = useAuth();
   const puedeGestionar = (permisos?.benefactores_ingresar ?? false) || (permisos?.benefactores_administrar ?? false);
+  const formSelectTriggerClass =
+    "h-11 rounded-xl border-slate-300 bg-white text-slate-900 shadow-sm transition focus:ring-2 focus:ring-sky-100 hover:border-slate-400";
 
   const [benefactores, setBenefactores] = useState<Benefactor[]>([]);
 
-  // ✅ lista independiente SOLO de TITULARES (sin filtro por ejecutivo)
+  // Lista independiente solo de titulares (sin filtro por ejecutivo)
   const [titularesDB, setTitularesDB] = useState<Benefactor[]>([]);
+  const [gruposCobroExterno, setGruposCobroExterno] = useState<GrupoCobroExterno[]>([]);
   const [bancos, setBancos] = useState<Banco[]>([]);
 
   const [convenioSugerido, setConvenioSugerido] = useState<string>("");
@@ -166,13 +170,37 @@ export default function Benefactores() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [tipoAfiliacion, setTipoAfiliacion] = useState("individual");
-  const [tipoBenefactor, setTipoBenefactor] = useState("TITULAR");
+  const [vinculacionCartera, setVinculacionCartera] = useState<VinculacionCartera>("cuenta_propia");
+  const esDependiente = vinculacionCartera === "dependiente_fundacion";
+  const esGrupoExterno = vinculacionCartera === "grupo_externo";
+  const descripcionVinculacion =
+    vinculacionCartera === "dependiente_fundacion"
+      ? "Este registro se crea como dependiente y siempre se cobra al titular de la fundacion."
+      : vinculacionCartera === "grupo_externo"
+        ? "Este registro se crea como titular vinculado a un grupo externo y no tendra cuenta propia."
+        : "Este registro se crea como titular con cuenta propia.";
 
   const [titularSeleccionado, setTitularSeleccionado] = useState("");
   const [searchTitular, setSearchTitular] = useState("");
+  const [titularBuscadorAbierto, setTitularBuscadorAbierto] = useState(false);
+  const titularSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const titularDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [grupoCobroExternoSeleccionado, setGrupoCobroExternoSeleccionado] = useState("");
+  const [mostrarCrearGrupoExterno, setMostrarCrearGrupoExterno] = useState(false);
+  const [guardandoGrupoExterno, setGuardandoGrupoExterno] = useState(false);
+  const [nuevoGrupoExterno, setNuevoGrupoExterno] = useState({
+    nombre_grupo: "",
+    nombre_titular_externo: "",
+    cedula_titular_externo: "",
+    banco_emisor: "",
+    tipo_cuenta: "",
+    num_cuenta: "",
+    n_convenio_cartera: "",
+    observacion: "",
+  });
 
   /** =======================
-   *  ✅ Contrato PDF obligatorio
+   *  Contrato PDF obligatorio
    *  ======================= */
   const [contratoFile, setContratoFile] = useState<File | null>(null);
   const [contratoPreviewUrl, setContratoPreviewUrl] = useState<string>("");
@@ -235,6 +263,15 @@ export default function Benefactores() {
   }, []);
 
   useEffect(() => {
+    if (!isDialogOpen || !puedeGestionar) {
+      return;
+    }
+
+    void loadSiguienteConvenio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDialogOpen, puedeGestionar]);
+
+  useEffect(() => {
     if (busquedaCorporacionRef.current) {
       clearTimeout(busquedaCorporacionRef.current);
     }
@@ -271,41 +308,40 @@ export default function Benefactores() {
     };
   }, [corporacion, tipoAfiliacion]);
 
-  const sugerirSiguienteConvenio = (lista: Benefactor[]): string => {
-    const ultimo = lista.find((b) => typeof b.n_convenio === "string" && /\d/.test(b.n_convenio));
-    const base = ultimo?.n_convenio?.trim();
-    if (!base) return "";
-
-    const match = base.match(/^(.*?)(\d+)(\D*)$/);
-    if (!match) return "";
-
-    const [, prefijo, numeroStr, sufijo] = match;
-    const numero = Number.parseInt(numeroStr, 10);
-    if (Number.isNaN(numero)) return "";
-
-    const siguiente = (numero + 1).toString().padStart(numeroStr.length, "0");
-    return `${prefijo}${siguiente}${sufijo}`;
+  const loadSiguienteConvenio = async () => {
+    try {
+      const response = await benefactoresService.getSiguienteConvenio();
+      setConvenioSugerido(response.data.n_convenio || "");
+    } catch {
+      setConvenioSugerido("");
+    }
   };
 
   const loadBenefactores = async () => {
     try {
       setLoading(true);
 
-      // Cargar benefactores (filtrados según permisos del usuario)
+      // Cargar benefactores (filtrados segun permisos del usuario)
       const response = await benefactoresService.getBenefactores();
       const data: Benefactor[] = response.data;
 
-      setConvenioSugerido(sugerirSiguienteConvenio(data));
       setBenefactores(data);
 
-      // ✅ Cargar TODOS los TITULARES del sistema (para dropdown de dependientes)
+      // Cargar todos los titulares del sistema (para dropdown de dependientes)
       // Este endpoint devuelve todos los titulares sin importar el usuario
       const titularesResponse = await benefactoresService.getTodosTitulares();
       setTitularesDB(titularesResponse.data);
 
+      const gruposResponse = await gruposCobroExternoService.getAll();
+      setGruposCobroExterno(gruposResponse.data);
+
       // Cargar bancos
       const bancosResponse = await bancosService.getAll();
       setBancos(bancosResponse.data.data || []);
+
+      if (puedeGestionar) {
+        await loadSiguienteConvenio();
+      }
 
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Error al cargar benefactores");
@@ -338,11 +374,73 @@ export default function Benefactores() {
     setCorporacionesSugeridas([]);
     setCargandoCorporaciones(false);
     setObservacion("");
-    setTipoBenefactor("TITULAR");
+    setVinculacionCartera("cuenta_propia");
     setTipoAfiliacion("individual");
     setTitularSeleccionado("");
     setSearchTitular("");
+    setGrupoCobroExternoSeleccionado("");
+    setMostrarCrearGrupoExterno(false);
+    setNuevoGrupoExterno({
+      nombre_grupo: "",
+      nombre_titular_externo: "",
+      cedula_titular_externo: "",
+      banco_emisor: "",
+      tipo_cuenta: "",
+      num_cuenta: "",
+      n_convenio_cartera: "",
+      observacion: "",
+    });
     limpiarContrato();
+  };
+
+  const handleCrearGrupoExterno = async () => {
+    if (!nuevoGrupoExterno.nombre_grupo.trim()) {
+      toast.error("El nombre del grupo es obligatorio");
+      return;
+    }
+
+    if (!nuevoGrupoExterno.nombre_titular_externo.trim()) {
+      toast.error("El titular externo es obligatorio");
+      return;
+    }
+
+    if (!nuevoGrupoExterno.n_convenio_cartera.trim()) {
+      toast.error("El convenio de cartera del grupo es obligatorio");
+      return;
+    }
+
+    try {
+      setGuardandoGrupoExterno(true);
+      const response = await gruposCobroExternoService.create({
+        nombre_grupo: nuevoGrupoExterno.nombre_grupo.trim().toUpperCase(),
+        nombre_titular_externo: nuevoGrupoExterno.nombre_titular_externo.trim().toUpperCase(),
+        cedula_titular_externo: nuevoGrupoExterno.cedula_titular_externo.trim() || undefined,
+        banco_emisor: nuevoGrupoExterno.banco_emisor.trim().toUpperCase() || undefined,
+        tipo_cuenta: nuevoGrupoExterno.tipo_cuenta || undefined,
+        num_cuenta: nuevoGrupoExterno.num_cuenta.trim() || undefined,
+        n_convenio_cartera: nuevoGrupoExterno.n_convenio_cartera.trim().toUpperCase(),
+        observacion: nuevoGrupoExterno.observacion.trim() || undefined,
+      });
+
+      setGruposCobroExterno((prev) => [...prev, response.data].sort((a, b) => a.nombre_grupo.localeCompare(b.nombre_grupo)));
+      setGrupoCobroExternoSeleccionado(String(response.data.id_grupo_cobro));
+      setMostrarCrearGrupoExterno(false);
+      setNuevoGrupoExterno({
+        nombre_grupo: "",
+        nombre_titular_externo: "",
+        cedula_titular_externo: "",
+        banco_emisor: "",
+        tipo_cuenta: "",
+        num_cuenta: "",
+        n_convenio_cartera: "",
+        observacion: "",
+      });
+      toast.success("Grupo externo creado exitosamente");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Error al crear grupo externo");
+    } finally {
+      setGuardandoGrupoExterno(false);
+    }
   };
 
   const handleGuardarBenefactor = async () => {
@@ -353,13 +451,13 @@ export default function Benefactores() {
 
     const ced = cedula.trim();
     if (!ced || ced.length !== 10 || !validarCedulaEcuador(ced)) {
-      setCedulaError("Cédula no válida");
-      toast.error("Cédula no válida");
+      setCedulaError("Cedula no valida");
+      toast.error("Cedula no valida");
       return;
     }
 
     if (!direccion.trim()) {
-      toast.error("La dirección es requerida");
+      toast.error("La direccion es requerida");
       return;
     }
 
@@ -373,17 +471,22 @@ export default function Benefactores() {
       return;
     }
 
-    if (tipoBenefactor === "DEPENDIENTE" && !titularSeleccionado) {
+    if (esDependiente && !titularSeleccionado) {
       toast.error("Seleccione un titular responsable");
       return;
     }
 
-    if (tipoAfiliacion === "corporativo" && !corporacion.trim()) {
-      toast.error("La corporación es obligatoria para afiliación corporativa");
+    if (esGrupoExterno && !grupoCobroExternoSeleccionado) {
+      toast.error("Seleccione o cree un grupo externo");
       return;
     }
 
-    // ✅ Contrato obligatorio
+    if (tipoAfiliacion === "corporativo" && !corporacion.trim()) {
+      toast.error("La corporacion es obligatoria para afiliacion corporativa");
+      return;
+    }
+
+    // Contrato obligatorio
     if (!contratoFile) {
       setContratoError("Debe subir el contrato PDF (obligatorio)");
       toast.error("Debe subir el contrato PDF antes de guardar");
@@ -394,7 +497,7 @@ export default function Benefactores() {
       setGuardando(true);
 
       const payload: any = {
-        tipo_benefactor: tipoBenefactor,
+        tipo_benefactor: esDependiente ? "DEPENDIENTE" : "TITULAR",
         nombre_completo: nombreCompleto.trim(),
         cedula: ced,
         nacionalidad: nacionalidad || undefined,
@@ -406,14 +509,14 @@ export default function Benefactores() {
         direccion: direccion.trim(),
         ciudad,
         provincia,
-        n_convenio: convenioSugerido || undefined,
         mes_prod: mesProduccion || undefined,
         tipo_afiliacion: tipoAfiliacion,
         corporacion: tipoAfiliacion === "corporativo" ? corporacion.trim() : undefined,
-        cuenta: tipoAfiliacion === "individual" ? (cuentaBancaria.trim() || undefined) : undefined,
-        num_cuenta_tc: tipoAfiliacion === "individual" ? (numCuentaTc.trim() || undefined) : undefined,
-        tipo_cuenta: tipoAfiliacion === "individual" ? (tipoCuenta || undefined) : undefined,
-        banco_emisor: tipoAfiliacion === "individual" ? (bancoEmisor.trim() || undefined) : undefined,
+        cuenta: !esDependiente && !esGrupoExterno && tipoAfiliacion === "individual" ? (cuentaBancaria.trim() || undefined) : undefined,
+        num_cuenta_tc: !esDependiente && !esGrupoExterno && tipoAfiliacion === "individual" ? (numCuentaTc.trim() || undefined) : undefined,
+        tipo_cuenta: !esDependiente && !esGrupoExterno && tipoAfiliacion === "individual" ? (tipoCuenta || undefined) : undefined,
+        banco_emisor: !esDependiente && !esGrupoExterno && tipoAfiliacion === "individual" ? (bancoEmisor.trim() || undefined) : undefined,
+        id_grupo_cobro_externo: esGrupoExterno ? Number(grupoCobroExternoSeleccionado) : undefined,
         inscripcion: Number(inscripcion || 0),
         aporte: Number(aporte || 0),
         observacion: observacion.trim() || undefined,
@@ -423,7 +526,7 @@ export default function Benefactores() {
       // 1) crear benefactor
       const created = await benefactoresService.createBenefactor(payload);
 
-      // 2) subir contrato obligatorio (misma lógica que usas en BenefactorDetail)
+      // 2) subir contrato obligatorio (misma logica que usas en BenefactorDetail)
       try {
         setSubiendoContrato(true);
         await benefactoresService.subirContrato(created.data.id_benefactor, contratoFile);
@@ -435,15 +538,15 @@ export default function Benefactores() {
         setSubiendoContrato(false);
       }
 
-      // 3) asignación dependiente (si aplica)
-      if (tipoBenefactor === "DEPENDIENTE") {
+      // 3) asignacion dependiente (si aplica)
+      if (esDependiente) {
         await benefactoresService.asignarDependiente({
           id_titular: Number(titularSeleccionado),
           id_dependiente: created.data.id_benefactor,
         });
       }
 
-      toast.success("Benefactor creado y contrato cargado. Queda pendiente de aprobación.");
+      toast.success("Benefactor creado y contrato cargado. Queda pendiente de aprobacion.");
       setIsDialogOpen(false);
       resetFormulario();
       await loadBenefactores();
@@ -454,15 +557,15 @@ export default function Benefactores() {
     }
   };
 
-  // Lista base de benefactores (sin filtrar por tipo aún)
+  // Lista base de benefactores (sin filtrar por tipo aun)
   const benefactoresBase = useMemo(() => benefactores, [benefactores]);
 
-  // Definición de columnas unificada
+  // Definicion de columnas unificada
   const columnasBenefactores: ColumnDef<Benefactor>[] = useMemo(
     () => [
       {
         accessorKey: "n_convenio",
-        header: "N° Convenio",
+        header: "Nro Convenio",
         cell: ({ row }) => (
           <span className="font-mono text-sm">{row.original.n_convenio || row.original.cedula}</span>
         ),
@@ -470,7 +573,7 @@ export default function Benefactores() {
       },
       {
         accessorKey: "cedula",
-        header: "Cédula",
+        header: "Cedula",
         cell: ({ row }) => <span className="font-mono text-sm">{row.original.cedula}</span>,
         enableSorting: true,
       },
@@ -550,7 +653,7 @@ export default function Benefactores() {
     });
   }, [benefactoresBase, globalFilter, estadoFilter, ciudadFilter, tipoFilter]);
 
-  // Obtener ciudades únicas de los benefactores cargados
+  // Obtener ciudades unicas de los benefactores cargados
   const ciudadesUnicas = useMemo(() => {
     const ciudades = new Set<string>();
     benefactoresBase.forEach((b) => {
@@ -582,7 +685,7 @@ export default function Benefactores() {
   const ciudadesDisponibles = useMemo(() => (provincia ? ciudadesPorProvincia[provincia] ?? [] : []), [provincia]);
   const provinciaPorCedula = useMemo(() => getProvinciaNombreDesdeCedula(cedula), [cedula]);
 
-  // ✅ Para el selector de titular: usamos titularesDB (TODOS)
+  // Para el selector de titular usamos titularesDB (todos)
   const titularesFiltradosParaSelector = useMemo(() => {
     const base = titularesDB;
     if (!searchTitular.trim()) return base;
@@ -590,6 +693,41 @@ export default function Benefactores() {
     const s = searchTitular.toLowerCase();
     return base.filter((t) => (t.nombre_completo || "").toLowerCase().includes(s) || (t.cedula || "").includes(s));
   }, [titularesDB, searchTitular]);
+
+  const titularSeleccionadoData = useMemo(
+    () => titularesDB.find((titular) => titular.id_benefactor.toString() === titularSeleccionado) || null,
+    [titularesDB, titularSeleccionado]
+  );
+
+  const handleSeleccionTitular = (value: string) => {
+    setTitularSeleccionado(value);
+    const titular = titularesDB.find((item) => item.id_benefactor.toString() === value);
+    if (titular) {
+      setSearchTitular(`${titular.nombre_completo} - ${titular.cedula}`);
+    }
+    setTitularBuscadorAbierto(false);
+  };
+
+  useEffect(() => {
+    if (!titularBuscadorAbierto) return;
+
+    const timer = window.setTimeout(() => {
+      titularSearchInputRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [titularBuscadorAbierto]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!titularDropdownRef.current) return;
+      if (titularDropdownRef.current.contains(event.target as Node)) return;
+      setTitularBuscadorAbierto(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   if (loading) {
     return (
@@ -608,7 +746,7 @@ export default function Benefactores() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Benefactores</h1>
-          <p className="text-white/90">Gestión de benefactores titulares y dependientes</p>
+          <p className="text-white/90">Gestion de benefactores titulares y dependientes</p>
         </div>
 
         {puedeGestionar ? (
@@ -629,13 +767,23 @@ export default function Benefactores() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[920px] max-h-[92vh] overflow-y-auto border-slate-200 bg-white p-0">
               <DialogHeader>
-                <DialogTitle>Registrar Nuevo Benefactor</DialogTitle>
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-4 sm:px-6 sm:py-5">
+                  <DialogTitle className="text-2xl font-semibold text-slate-900">Registrar Nuevo Benefactor</DialogTitle>
+                  <DialogDescription className="mt-2 text-sm text-slate-600">
+                    Completa la informacion personal, administrativa y el contrato para dejar el registro listo para aprobacion.
+                  </DialogDescription>
+                </div>
               </DialogHeader>
 
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-6 px-4 py-4 sm:px-6 sm:py-6">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-700">Datos Personales</h3>
+                    <p className="mt-1 text-sm text-slate-500">Identificacion y datos basicos del benefactor.</p>
+                  </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="nombre">Nombre completo</Label>
                     <Input
@@ -648,7 +796,7 @@ export default function Benefactores() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cedula">Cédula</Label>
+                    <Label htmlFor="cedula">Cedula</Label>
                     <Input
                       id="cedula"
                       placeholder="Ej: 1712345678"
@@ -660,12 +808,12 @@ export default function Benefactores() {
                         setCedula(val);
 
                         if (val.length >= 2 && !validarProvincia(val)) {
-                          setCedulaError("Cédula no válida");
+                          setCedulaError("Cedula no valida");
                           return;
                         }
 
                         if (val.length === 10) {
-                          setCedulaError(validarCedulaEcuador(val) ? "" : "Cédula no válida");
+                          setCedulaError(validarCedulaEcuador(val) ? "" : "Cedula no valida");
                           return;
                         }
 
@@ -682,27 +830,27 @@ export default function Benefactores() {
                     />
 
                     {cedulaError ? (
-                      <p className="text-xs text-red-600">Cédula no válida</p>
+                      <p className="text-xs text-red-600">Cedula no valida</p>
                     ) : cedula.length >= 2 && provinciaPorCedula ? (
                       <p className="text-xs text-gray-600">
                         Provincia detectada: <span className="font-medium">{provinciaPorCedula}</span>{" "}
-                        <span className="text-gray-400">(código {cedula.slice(0, 2)})</span>
+                        <span className="text-gray-400">(codigo {cedula.slice(0, 2)})</span>
                         {cedula.length === 10 && validarCedulaEcuador(cedula) ? (
-                          <span className="ml-2 text-green-600 font-medium">— cédula válida ✅</span>
+                          <span className="ml-2 text-green-600 font-medium">- cedula valida</span>
                         ) : null}
                       </p>
                     ) : (
-                      <p className="text-xs text-gray-500">Los dos primeros dígitos corresponden a la provincia (01–24).</p>
+                      <p className="text-xs text-gray-500">Los dos primeros digitos corresponden a la provincia (01-24).</p>
                     )}
                   </div>
                 </div>
 
                 {/* Campos adicionales: Nacionalidad, Estado Civil, Fecha Nacimiento */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="nacionalidad">Nacionalidad</Label>
                     <Select value={nacionalidad} onValueChange={setNacionalidad} disabled={guardando || subiendoContrato}>
-                      <SelectTrigger id="nacionalidad">
+                      <SelectTrigger id="nacionalidad" className={formSelectTriggerClass}>
                         <SelectValue placeholder="Seleccione" />
                       </SelectTrigger>
                       <SelectContent>
@@ -717,7 +865,7 @@ export default function Benefactores() {
                   <div className="space-y-2">
                     <Label htmlFor="estadoCivil">Estado Civil</Label>
                     <Select value={estadoCivil} onValueChange={setEstadoCivil} disabled={guardando || subiendoContrato}>
-                      <SelectTrigger id="estadoCivil">
+                      <SelectTrigger id="estadoCivil" className={formSelectTriggerClass}>
                         <SelectValue placeholder="Seleccione" />
                       </SelectTrigger>
                       <SelectContent>
@@ -725,7 +873,7 @@ export default function Benefactores() {
                         <SelectItem value="CASADO/A">Casado/a</SelectItem>
                         <SelectItem value="DIVORCIADO/A">Divorciado/a</SelectItem>
                         <SelectItem value="VIUDO/A">Viudo/a</SelectItem>
-                        <SelectItem value="UNION LIBRE">Unión Libre</SelectItem>
+                        <SelectItem value="UNION LIBRE">Union Libre</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -741,79 +889,149 @@ export default function Benefactores() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="tipo">Tipo</Label>
+                    <Label htmlFor="vinculacion">Vinculacion de Cartera</Label>
                     <Select
-                      value={tipoBenefactor}
+                      value={vinculacionCartera}
                       onValueChange={(val) => {
-                        setTipoBenefactor(val);
-
-                        // si cambia a TITULAR, limpiamos selección de titular
-                        if (val !== "DEPENDIENTE") {
+                        setVinculacionCartera(val as VinculacionCartera);
+                        if (val !== "dependiente_fundacion") {
                           setTitularSeleccionado("");
                           setSearchTitular("");
+                        }
+
+                        if (val !== "grupo_externo") {
+                          setGrupoCobroExternoSeleccionado("");
+                          setMostrarCrearGrupoExterno(false);
+                        }
+
+                        if (val !== "cuenta_propia") {
+                          setCuentaBancaria("");
+                          setNumCuentaTc("");
+                          setTipoCuenta("");
+                          setBancoEmisor("");
                         }
                       }}
                       disabled={guardando || subiendoContrato}
                     >
-                      <SelectTrigger id="tipo">
-                        <SelectValue placeholder="Seleccione tipo" />
+                      <SelectTrigger id="vinculacion" className={formSelectTriggerClass}>
+                        <SelectValue placeholder="Seleccione como se cobrara" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="TITULAR">Titular</SelectItem>
-                        <SelectItem value="DEPENDIENTE">Dependiente</SelectItem>
+                        <SelectItem value="cuenta_propia">Titular con cuenta propia</SelectItem>
+                        <SelectItem value="dependiente_fundacion">Dependiente de titular fundacion</SelectItem>
+                        <SelectItem value="grupo_externo">Titular con grupo externo</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="convenio">Número de Convenio</Label>
-                    <div className="h-10 px-3 py-2 bg-gray-100 border border-gray-300 rounded-md flex items-center">
+                    <Label htmlFor="convenio">Numero de Convenio</Label>
+                    <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-slate-50 px-4 shadow-sm">
                       <span className="font-mono text-sm text-gray-600">
-                        {convenioSugerido || "Generando..."}
+                        {convenioSugerido || "Se asigna al guardar"}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {tipoBenefactor === "DEPENDIENTE" && (
-                  <div className="space-y-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  {descripcionVinculacion}
+                </div>
+
+                {esDependiente && (
+                  <div className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
                     <Label htmlFor="titular">Titular Responsable</Label>
 
-                    <div className="space-y-2">
+                    <div ref={titularDropdownRef} className="relative">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <Input
-                          placeholder="Buscar titular..."
+                          id="titular"
+                          ref={titularSearchInputRef}
+                          placeholder="Buscar y seleccionar titular..."
                           value={searchTitular}
-                          onChange={(e) => setSearchTitular(e.target.value)}
-                          className="pl-10 bg-white text-gray-900 border-gray-300"
+                          onFocus={() => setTitularBuscadorAbierto(true)}
+                          onClick={() => setTitularBuscadorAbierto(true)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setSearchTitular(value);
+                            setTitularBuscadorAbierto(true);
+                            if (titularSeleccionado && titularSeleccionadoData) {
+                              const textoSeleccionado = `${titularSeleccionadoData.nombre_completo} - ${titularSeleccionadoData.cedula}`;
+                              if (value !== textoSeleccionado) {
+                                setTitularSeleccionado("");
+                              }
+                            }
+                          }}
+                          className="h-11 rounded-xl border-slate-300 bg-white pl-10 pr-10 text-slate-900 shadow-sm"
                           disabled={guardando || subiendoContrato}
                         />
+                        {searchTitular && !guardando && !subiendoContrato ? (
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            onClick={() => {
+                              setSearchTitular("");
+                              setTitularSeleccionado("");
+                              setTitularBuscadorAbierto(true);
+                              titularSearchInputRef.current?.focus();
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
                       </div>
 
-                      <Select
-                        value={titularSeleccionado}
-                        onValueChange={setTitularSeleccionado}
-                        disabled={guardando || subiendoContrato}
-                      >
-                        <SelectTrigger id="titular" className="bg-white text-gray-900">
-                          <SelectValue placeholder="Seleccione el titular" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white max-h-[250px]">
-                          {titularesFiltradosParaSelector.map((titular) => (
-                            <SelectItem
-                              key={titular.id_benefactor}
-                              value={titular.id_benefactor.toString()}
-                              className="text-gray-900"
-                            >
-                              {titular.nombre_completo} - {titular.cedula}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {titularBuscadorAbierto && (
+                        <div className="absolute z-50 mt-2 max-h-[280px] w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                          <div className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            Titulares disponibles
+                          </div>
+                          <div className="max-h-[228px] overflow-y-auto p-2">
+                            {titularesFiltradosParaSelector.slice(0, 12).length > 0 ? (
+                              <div className="space-y-1">
+                                {titularesFiltradosParaSelector.slice(0, 12).map((titular) => {
+                                  const isSelected = titular.id_benefactor.toString() === titularSeleccionado;
+                                  return (
+                                    <button
+                                      key={titular.id_benefactor}
+                                      type="button"
+                                      className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition ${
+                                        isSelected ? "bg-sky-50 text-sky-900" : "text-slate-700 hover:bg-slate-100"
+                                      }`}
+                                      onClick={() => handleSeleccionTitular(titular.id_benefactor.toString())}
+                                    >
+                                      <span className="min-w-0">
+                                        <span className="block truncate font-medium">{titular.nombre_completo}</span>
+                                        <span className="block text-xs text-slate-500">{titular.cedula}</span>
+                                      </span>
+                                      {isSelected ? (
+                                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
+                                          Seleccionado
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="rounded-lg px-3 py-3 text-sm text-slate-500">
+                                No se encontraron titulares con esa busqueda.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
+
+                    {titularSeleccionadoData ? (
+                      <div className="rounded-xl border border-sky-200 bg-white/90 px-3 py-2 text-sm text-sky-900">
+                        <span className="font-medium">Titular seleccionado:</span>{" "}
+                        {titularSeleccionadoData.nombre_completo} - {titularSeleccionadoData.cedula}
+                      </div>
+                    ) : null}
 
                     {titularesDB.length === 0 && (
                       <p className="text-xs text-amber-600">No hay titulares disponibles en la base de datos.</p>
@@ -821,8 +1039,142 @@ export default function Benefactores() {
                   </div>
                 )}
 
+                {esGrupoExterno && (
+                  <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <Label htmlFor="grupo-cobro-externo">Grupo Externo</Label>
+                        <p className="mt-1 text-xs text-amber-800">
+                          Este benefactor se cobrara con el convenio compartido de una cuenta externa.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-amber-300 text-amber-900"
+                        onClick={() => setMostrarCrearGrupoExterno((prev) => !prev)}
+                      >
+                        {mostrarCrearGrupoExterno ? "Ocultar formulario" : "Crear grupo externo"}
+                      </Button>
+                    </div>
+
+                    <Select
+                      value={grupoCobroExternoSeleccionado}
+                      onValueChange={setGrupoCobroExternoSeleccionado}
+                      disabled={guardando || subiendoContrato}
+                    >
+                      <SelectTrigger id="grupo-cobro-externo" className={formSelectTriggerClass}>
+                        <SelectValue placeholder="Seleccione un grupo externo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gruposCobroExterno.map((grupo) => (
+                          <SelectItem key={grupo.id_grupo_cobro} value={String(grupo.id_grupo_cobro)}>
+                            {grupo.nombre_grupo} - {grupo.n_convenio_cartera}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {mostrarCrearGrupoExterno && (
+                      <div className="grid grid-cols-1 gap-4 rounded-xl border border-amber-200 bg-white p-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-grupo-nombre">Nombre del Grupo</Label>
+                          <Input
+                            id="nuevo-grupo-nombre"
+                            value={nuevoGrupoExterno.nombre_grupo}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, nombre_grupo: e.target.value.toUpperCase() })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-grupo-convenio">Convenio de Cartera</Label>
+                          <Input
+                            id="nuevo-grupo-convenio"
+                            value={nuevoGrupoExterno.n_convenio_cartera}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, n_convenio_cartera: e.target.value.toUpperCase() })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-titular-externo">Titular Externo</Label>
+                          <Input
+                            id="nuevo-titular-externo"
+                            value={nuevoGrupoExterno.nombre_titular_externo}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, nombre_titular_externo: e.target.value.toUpperCase() })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-cedula-externa">Cedula Titular Externo</Label>
+                          <Input
+                            id="nuevo-cedula-externa"
+                            value={nuevoGrupoExterno.cedula_titular_externo}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, cedula_titular_externo: e.target.value })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-banco-externo">Banco</Label>
+                          <Input
+                            id="nuevo-banco-externo"
+                            value={nuevoGrupoExterno.banco_emisor}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, banco_emisor: e.target.value.toUpperCase() })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-num-cuenta-externo">Numero de Cuenta</Label>
+                          <Input
+                            id="nuevo-num-cuenta-externo"
+                            value={nuevoGrupoExterno.num_cuenta}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, num_cuenta: e.target.value })}
+                            disabled={guardandoGrupoExterno}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nuevo-tipo-cuenta-externo">Tipo de Cuenta</Label>
+                          <Select
+                            value={nuevoGrupoExterno.tipo_cuenta}
+                            onValueChange={(value) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, tipo_cuenta: value })}
+                            disabled={guardandoGrupoExterno}
+                          >
+                            <SelectTrigger id="nuevo-tipo-cuenta-externo" className={formSelectTriggerClass}>
+                              <SelectValue placeholder="Seleccione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CORRIENTE">Corriente</SelectItem>
+                              <SelectItem value="AHORROS">Ahorros</SelectItem>
+                              <SelectItem value="CREDITO">Credito</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="nuevo-observacion-grupo">Observacion</Label>
+                          <Textarea
+                            id="nuevo-observacion-grupo"
+                            value={nuevoGrupoExterno.observacion}
+                            onChange={(e) => setNuevoGrupoExterno({ ...nuevoGrupoExterno, observacion: e.target.value })}
+                            disabled={guardandoGrupoExterno}
+                            rows={2}
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex justify-end">
+                          <Button
+                            type="button"
+                            className="bg-[#1b76b9] hover:bg-[#155a8a] text-white"
+                            onClick={handleCrearGrupoExterno}
+                            disabled={guardandoGrupoExterno}
+                          >
+                            Guardar grupo externo
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <Label htmlFor="tipoAfiliacion">Tipo de Afiliación</Label>
+                  <Label htmlFor="tipoAfiliacion">Tipo de Afiliacion</Label>
                   <Select
                     value={tipoAfiliacion}
                     onValueChange={(value) => {
@@ -834,8 +1186,8 @@ export default function Benefactores() {
                     }}
                     disabled={guardando || subiendoContrato}
                   >
-                    <SelectTrigger id="tipoAfiliacion">
-                      <SelectValue placeholder="Seleccione tipo de afiliación" />
+                    <SelectTrigger id="tipoAfiliacion" className={formSelectTriggerClass}>
+                      <SelectValue placeholder="Seleccione tipo de afiliacion" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="individual">Individual</SelectItem>
@@ -844,14 +1196,14 @@ export default function Benefactores() {
                   </Select>
                 </div>
 
-                {tipoAfiliacion === "individual" && (
+                {tipoAfiliacion === "individual" && !esDependiente && !esGrupoExterno && (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="cuenta">Número de Cuenta Bancaria</Label>
+                        <Label htmlFor="cuenta">Numero de Cuenta Bancaria</Label>
                         <Input
                           id="cuenta"
-                          placeholder="Ingrese número de cuenta"
+                          placeholder="Ingrese numero de cuenta"
                           value={cuentaBancaria}
                           onChange={(e) => setCuentaBancaria(e.target.value.toUpperCase())}
                           disabled={guardando || subiendoContrato}
@@ -864,7 +1216,7 @@ export default function Benefactores() {
                           onValueChange={setBancoEmisor}
                           disabled={guardando || subiendoContrato}
                         >
-                          <SelectTrigger id="bancoEmisor">
+                          <SelectTrigger id="bancoEmisor" className={formSelectTriggerClass}>
                             <SelectValue placeholder="Seleccione un banco" />
                           </SelectTrigger>
                           <SelectContent>
@@ -878,10 +1230,10 @@ export default function Benefactores() {
                       </div>
                     </div>
 
-                    {/* Campos de Tarjeta de Crédito */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Campos de tarjeta de credito */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="numCuentaTc">Número de Tarjeta (Opcional)</Label>
+                        <Label htmlFor="numCuentaTc">Numero de Tarjeta (Opcional)</Label>
                         <Input
                           id="numCuentaTc"
                           placeholder="XXXX XXXX XXXX XXXX"
@@ -894,13 +1246,13 @@ export default function Benefactores() {
                       <div className="space-y-2">
                         <Label htmlFor="tipoCuenta">Tipo de Cuenta</Label>
                         <Select value={tipoCuenta} onValueChange={setTipoCuenta} disabled={guardando || subiendoContrato}>
-                          <SelectTrigger id="tipoCuenta">
+                          <SelectTrigger id="tipoCuenta" className={formSelectTriggerClass}>
                             <SelectValue placeholder="Seleccione" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="CORRIENTE">Corriente</SelectItem>
                             <SelectItem value="AHORROS">Ahorros</SelectItem>
-                            <SelectItem value="CREDITO">Crédito</SelectItem>
+                            <SelectItem value="CREDITO">Credito</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -908,14 +1260,30 @@ export default function Benefactores() {
                   </>
                 )}
 
+                {tipoAfiliacion === "individual" && esDependiente && (
+                  <Alert>
+                    <AlertDescription className="text-sm">
+                      Los dependientes usan el debito consolidado de su titular. Por eso no registran cuenta bancaria ni tarjeta propias.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {esGrupoExterno && (
+                  <Alert>
+                    <AlertDescription className="text-sm">
+                      Los benefactores vinculados a grupo externo usan el convenio compartido de esa cuenta y no registran datos bancarios propios para cartera.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {tipoAfiliacion === "corporativo" && (
                   <div className="space-y-2">
-                    <Label htmlFor="corporacion">Corporación</Label>
+                    <Label htmlFor="corporacion">Corporacion</Label>
                     <div className="space-y-1">
                       <Input
                         id="corporacion"
                         list="corporaciones-sugeridas"
-                        placeholder="Ingrese nombre de la corporación"
+                        placeholder="Ingrese nombre de la corporacion"
                         value={corporacion}
                         onChange={(e) => setCorporacion(e.target.value.toUpperCase())}
                         disabled={guardando || subiendoContrato}
@@ -938,14 +1306,15 @@ export default function Benefactores() {
                     </div>
                   </div>
                 )}
+                </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="fechaCarga">Fecha de Carga</Label>
                     <Input id="fechaCarga" type="text" value={new Date().toLocaleDateString("es-EC")} disabled />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="fechaSuscripcion">Fecha de Suscripción</Label>
+                    <Label htmlFor="fechaSuscripcion">Fecha de Suscripcion</Label>
                     <Input
                       id="fechaSuscripcion"
                       type="date"
@@ -955,7 +1324,7 @@ export default function Benefactores() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="mesProduccion">Mes de Producción</Label>
+                    <Label htmlFor="mesProduccion">Mes de Produccion</Label>
                     <Input
                       id="mesProduccion"
                       type="month"
@@ -967,17 +1336,17 @@ export default function Benefactores() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="direccion">Dirección</Label>
+                  <Label htmlFor="direccion">Direccion</Label>
                   <Input
                     id="direccion"
-                    placeholder="Calle principal, número, referencia"
+                    placeholder="Calle principal, numero, referencia"
                     value={direccion}
                     onChange={(e) => setDireccion(e.target.value.toUpperCase())}
                     disabled={guardando || subiendoContrato}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="provincia">Provincia</Label>
                     <Select
@@ -988,7 +1357,7 @@ export default function Benefactores() {
                       }}
                       disabled={guardando || subiendoContrato}
                     >
-                      <SelectTrigger id="provincia">
+                      <SelectTrigger id="provincia" className={formSelectTriggerClass}>
                         <SelectValue placeholder="Seleccione provincia" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1008,7 +1377,7 @@ export default function Benefactores() {
                       onValueChange={setCiudad}
                       disabled={guardando || subiendoContrato || !provincia || ciudadesDisponibles.length === 0}
                     >
-                      <SelectTrigger id="ciudad">
+                      <SelectTrigger id="ciudad" className={formSelectTriggerClass}>
                         <SelectValue placeholder={provincia ? "Seleccione ciudad" : "Primero seleccione provincia"} />
                       </SelectTrigger>
                       <SelectContent>
@@ -1022,9 +1391,9 @@ export default function Benefactores() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="telefono">Teléfono</Label>
+                    <Label htmlFor="telefono">Telefono</Label>
                     <Input
                       id="telefono"
                       placeholder="Ej: 0987654321"
@@ -1035,7 +1404,7 @@ export default function Benefactores() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Correo electrónico</Label>
+                    <Label htmlFor="email">Correo electronico</Label>
                     <Input
                       id="email"
                       type="email"
@@ -1047,9 +1416,9 @@ export default function Benefactores() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="inscripcion">Inscripción</Label>
+                    <Label htmlFor="inscripcion">Inscripcion</Label>
                     <Input
                       id="inscripcion"
                       type="number"
@@ -1072,9 +1441,9 @@ export default function Benefactores() {
                   </div>
                 </div>
 
-                {/* Campo de Observación */}
+                {/* Campo de observacion */}
                 <div className="space-y-2">
-                  <Label htmlFor="observacion">Observación</Label>
+                  <Label htmlFor="observacion">Observacion</Label>
                   <Textarea
                     id="observacion"
                     placeholder="Notas o comentarios adicionales sobre el benefactor..."
@@ -1085,7 +1454,7 @@ export default function Benefactores() {
                   />
                 </div>
 
-                {/* ✅ Contrato PDF (OBLIGATORIO) */}
+                {/* Contrato PDF (obligatorio) */}
                 <div className="space-y-2">
                   <Label htmlFor="contratoPdf" className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -1107,7 +1476,7 @@ export default function Benefactores() {
                       {contratoError}
                     </p>
                   ) : contratoFile ? (
-                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <div className="flex flex-col gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-green-800">
                         PDF cargado: <span className="font-medium">{contratoFile.name}</span>
                       </p>
@@ -1125,7 +1494,7 @@ export default function Benefactores() {
                     </div>
                   ) : (
                     <p className="text-xs text-gray-500">
-                      Obligatorio. Solo PDF (máx. {MAX_PDF_MB}MB). Puede ser escaneado o foto convertida a PDF.
+                      Obligatorio. Solo PDF (max. {MAX_PDF_MB}MB). Puede ser escaneado o foto convertida a PDF.
                     </p>
                   )}
 
@@ -1139,13 +1508,13 @@ export default function Benefactores() {
 
                 <Alert>
                   <AlertDescription className="text-sm">
-                    <strong>Protección de datos:</strong> La información de tarjetas de crédito se maneja de forma segura según la normativa ecuatoriana.
-                    No se almacena CVV ni información sensible en texto plano. Los datos están enmascarados como ****-****-****-1234.
+                    <strong>Proteccion de datos:</strong> La informacion de tarjetas de credito se maneja de forma segura segun la normativa ecuatoriana.
+                    No se almacena CVV ni informacion sensible en texto plano. Los datos estan enmascarados como ****-****-****-1234.
                   </AlertDescription>
                 </Alert>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="border-t border-slate-200 bg-white px-4 py-4 sm:px-6 flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
@@ -1216,12 +1585,12 @@ export default function Benefactores() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar por nombre, cédula o N° convenio..."
+              placeholder="Buscar por nombre, cedula o nro convenio..."
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="pl-10"
@@ -1268,6 +1637,7 @@ export default function Benefactores() {
             <Button
               variant="outline"
               size="icon"
+              className="w-full xl:w-10"
               onClick={() => {
                 setGlobalFilter("");
                 setEstadoFilter("todos");
@@ -1281,19 +1651,31 @@ export default function Benefactores() {
         </div>
       </div>
 
-      {/* Tabla única de benefactores */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
+      {/* Tabla unica de benefactores */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+          <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-slate-800">Listado de benefactores</p>
+              <p>Consulta el detalle y filtra rapidamente por estado, ciudad o tipo.</p>
+            </div>
+            <Badge className="w-fit bg-sky-100 text-sky-800 hover:bg-sky-100">
+              {benefactoresFiltrados.length} resultado{benefactoresFiltrados.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+        </div>
+
         {/* Tabla desktop */}
         <div className="hidden md:block overflow-x-auto">
-          <Table>
+          <Table className="min-w-[980px]">
             <TableHeader>
               {tablaBenefactores.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="bg-gray-50">
+                <TableRow key={headerGroup.id} className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="text-gray-700 font-semibold">
+                    <TableHead key={header.id} className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <div
-                          className="flex items-center gap-2 cursor-pointer select-none hover:bg-gray-100 rounded px-2 py-1 -mx-2 -my-1"
+                          className="flex items-center gap-2 cursor-pointer select-none rounded px-2 py-1 -mx-2 -my-1 hover:bg-slate-100"
                           onClick={(e) => {
                             e.preventDefault();
                             const toggleSorting = header.column.getToggleSortingHandler();
@@ -1314,9 +1696,9 @@ export default function Benefactores() {
             <TableBody>
               {tablaBenefactores.getRowModel().rows.length > 0 ? (
                 tablaBenefactores.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id} className="hover:bg-gray-50">
+                  <TableRow key={row.id} className="border-slate-200 transition-colors hover:bg-slate-50/80">
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className="px-4 py-4">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -1333,18 +1715,18 @@ export default function Benefactores() {
           </Table>
         </div>
 
-        {/* Vista móvil - Cards */}
-        <div className="md:hidden p-6 space-y-4">
+        {/* Vista movil - Cards */}
+        <div className="md:hidden p-4 sm:p-6 space-y-4">
           {tablaBenefactores.getRowModel().rows.length > 0 ? (
             tablaBenefactores.getRowModel().rows.map((row) => {
               const benefactor = row.original;
               return (
-                <Card key={benefactor.id_benefactor} className="border-2">
+                <Card key={benefactor.id_benefactor} className="overflow-hidden border border-slate-200 shadow-sm">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
-                        <p className="text-sm text-gray-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
+                        <p className="font-semibold text-lg text-slate-900">{benefactor.nombre_completo}</p>
+                        <p className="text-sm text-slate-600 font-mono">{benefactor.n_convenio || benefactor.cedula}</p>
                       </div>
                       <Badge
                         className={
@@ -1357,7 +1739,7 @@ export default function Benefactores() {
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-1 gap-2 text-sm xs:grid-cols-2">
                       <div>
                         <p className="text-xs text-gray-500">Tipo</p>
                         <Badge variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
@@ -1371,7 +1753,7 @@ export default function Benefactores() {
                     </div>
 
                     <Link to={`/benefactores/${benefactor.id_benefactor}`} className="block">
-                      <Button variant="outline" size="sm" className="w-full">
+                      <Button variant="outline" size="sm" className="w-full border-slate-300 text-slate-700 hover:bg-slate-100">
                         <Eye className="h-4 w-4 mr-2" />
                         Ver detalles
                       </Button>
@@ -1387,9 +1769,9 @@ export default function Benefactores() {
           )}
         </div>
 
-        {/* Paginación */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-          <div className="text-sm text-gray-600">
+        {/* Paginacion */}
+        <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
             Mostrando {tablaBenefactores.getState().pagination.pageIndex * tablaBenefactores.getState().pagination.pageSize + 1} a{" "}
             {Math.min(
               (tablaBenefactores.getState().pagination.pageIndex + 1) * tablaBenefactores.getState().pagination.pageSize,
@@ -1397,10 +1779,11 @@ export default function Benefactores() {
             )}{" "}
             de {benefactoresFiltrados.length} registros
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:justify-start">
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => tablaBenefactores.setPageIndex(0)}
               disabled={!tablaBenefactores.getCanPreviousPage()}
             >
@@ -1409,17 +1792,19 @@ export default function Benefactores() {
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => tablaBenefactores.previousPage()}
               disabled={!tablaBenefactores.getCanPreviousPage()}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-gray-600">
-              Página {tablaBenefactores.getState().pagination.pageIndex + 1} de {tablaBenefactores.getPageCount()}
+            <span className="px-2 text-sm font-medium text-slate-600">
+              Pagina {tablaBenefactores.getState().pagination.pageIndex + 1} de {tablaBenefactores.getPageCount()}
             </span>
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => tablaBenefactores.nextPage()}
               disabled={!tablaBenefactores.getCanNextPage()}
             >
@@ -1428,6 +1813,7 @@ export default function Benefactores() {
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => tablaBenefactores.setPageIndex(tablaBenefactores.getPageCount() - 1)}
               disabled={!tablaBenefactores.getCanNextPage()}
             >
@@ -1438,13 +1824,13 @@ export default function Benefactores() {
             value={tablaBenefactores.getState().pagination.pageSize.toString()}
             onValueChange={(value) => tablaBenefactores.setPageSize(Number(value))}
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-full sm:w-36 border-slate-300 bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {[10, 20, 30, 50].map((pageSize) => (
                 <SelectItem key={pageSize} value={pageSize.toString()}>
-                  {pageSize} por página
+                  {pageSize} por pagina
                 </SelectItem>
               ))}
             </SelectContent>

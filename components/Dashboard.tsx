@@ -202,7 +202,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
+      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-4 sm:p-6 shadow-md">
         <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
         <p className="text-white/90">Bienvenido al sistema administrativo de FPUS</p>
       </div>
@@ -248,7 +248,7 @@ export default function Dashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {chartEstadoAportes.map((item) => (
                   <div key={item.name} className="rounded-md border border-gray-200 px-3 py-2 text-sm">
                     <div className="flex items-center gap-2">
@@ -285,8 +285,8 @@ export default function Dashboard() {
 
       {/* Información del sistema */}
       <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-gray-200">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <div className="w-12 h-12 bg-[#1b76b9] rounded-lg flex items-center justify-center">
               <TrendingUp className="h-6 w-6 text-white" />
             </div>
@@ -314,7 +314,7 @@ export default function Dashboard() {
                 <button 
                   key={index}
                   onClick={() => navigate(action.path)}
-                  className={`${action.color} text-white rounded-lg text-left transition-all hover:scale-105 p-6 flex flex-col gap-3 shadow-md`}
+                  className={`${action.color} text-white rounded-lg text-left transition-all hover:scale-[1.02] p-5 sm:p-6 flex flex-col gap-3 shadow-md min-h-[140px]`}
                 >
                   <Icon className="h-8 w-8" />
                   <span className="font-medium">{action.label}</span>

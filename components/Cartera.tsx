@@ -9,8 +9,9 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { cobrosService } from "../services/cobros.service";
-import { EstadoPago, Estadisticas } from "../types";
+import { EstadoPago, Estadisticas, HistorialAporteMensualItem, HistorialAportesSummary } from "../types";
 import { toast } from "sonner";
 
 interface HistorialAporte {
@@ -29,6 +30,7 @@ type SortField = 'n_convenio' | 'nombre_completo' | null;
 type SortDirection = 'asc' | 'desc';
 
 export default function Cartera() {
+  const [activeTab, setActiveTab] = useState<"actual" | "historico">("actual");
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [estadosPago, setEstadosPago] = useState<EstadoPago[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,19 @@ export default function Cartera() {
   // Paginación
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+
+  // Histórico
+  const [historicoData, setHistoricoData] = useState<HistorialAporteMensualItem[]>([]);
+  const [historicoSummary, setHistoricoSummary] = useState<HistorialAportesSummary | null>(null);
+  const [historicoLoading, setHistoricoLoading] = useState(false);
+  const [historicoSearchTerm, setHistoricoSearchTerm] = useState("");
+  const [historicoEstadoFilter, setHistoricoEstadoFilter] = useState("todos");
+  const [historicoFechaDesde, setHistoricoFechaDesde] = useState("");
+  const [historicoFechaHasta, setHistoricoFechaHasta] = useState("");
+  const [historicoPageIndex, setHistoricoPageIndex] = useState(0);
+  const [historicoPageSize, setHistoricoPageSize] = useState(10);
+  const [historicoTotalPages, setHistoricoTotalPages] = useState(1);
+  const [historicoTotalRecords, setHistoricoTotalRecords] = useState(0);
 
   // Modal historial
   const [historialOpen, setHistorialOpen] = useState(false);
@@ -79,6 +94,16 @@ export default function Cartera() {
     setPageIndex(0);
   }, [searchTerm, estadoFilter]);
 
+  useEffect(() => {
+    setHistoricoPageIndex(0);
+  }, [historicoSearchTerm, historicoEstadoFilter, historicoFechaDesde, historicoFechaHasta]);
+
+  useEffect(() => {
+    if (activeTab !== "historico") return;
+    loadHistoricoData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, historicoSearchTerm, historicoEstadoFilter, historicoFechaDesde, historicoFechaHasta, historicoPageIndex, historicoPageSize]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -96,13 +121,72 @@ export default function Cartera() {
     }
   };
 
+  const loadHistoricoData = async () => {
+    try {
+      setHistoricoLoading(true);
+      const response = await cobrosService.getHistorialAportesMensuales({
+        search: historicoSearchTerm.trim() || undefined,
+        estado: historicoEstadoFilter !== "todos" ? historicoEstadoFilter : undefined,
+        fechaDesde: historicoFechaDesde || undefined,
+        fechaHasta: historicoFechaHasta || undefined,
+        page: historicoPageIndex + 1,
+        limit: historicoPageSize,
+      });
+
+      setHistoricoData(response.data || []);
+      setHistoricoSummary((response.summary as HistorialAportesSummary | undefined) || null);
+      setHistoricoTotalPages(response.pagination?.pages || 1);
+      setHistoricoTotalRecords(response.pagination?.total || response.total || 0);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Error al cargar el historico de aportes");
+      setHistoricoData([]);
+      setHistoricoSummary(null);
+      setHistoricoTotalPages(1);
+      setHistoricoTotalRecords(0);
+    } finally {
+      setHistoricoLoading(false);
+    }
+  };
+
   const formatCurrency = (value: string) => {
     return `$${parseFloat(value).toFixed(2)}`;
   };
 
+  const formatCurrencySafe = (value: unknown, fallback: string = "0") => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return formatCurrency(String(value));
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) {
+        const normalized = trimmed.replace(/,/g, "");
+        const parsed = Number(normalized);
+        if (Number.isFinite(parsed)) {
+          return formatCurrency(String(parsed));
+        }
+      }
+    }
+
+    return formatCurrency(fallback);
+  };
+
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString('es-EC', {
+    const value = String(dateString).trim();
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (match) {
+      const [, year, month, day] = match;
+      const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      const mesIndex = Number(month) - 1;
+      return `${Number(day)} ${meses[mesIndex] || month} ${year}`;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "N/A";
+
+    return parsed.toLocaleDateString('es-EC', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -516,6 +600,9 @@ export default function Cartera() {
 
         // Recargar datos
         loadData();
+        if (activeTab === "historico") {
+          loadHistoricoData();
+        }
         handleCerrarModalImportacion();
       } else {
         toast.error('Error en la importación');
@@ -629,12 +716,12 @@ export default function Cartera() {
   const renderTable = (data: EstadoPago[]) => (
     <>
       {/* Vista desktop - Tabla */}
-      <div className="hidden xl:block overflow-x-auto">
-        <Table>
+      <div className="hidden xl:block">
+        <Table className="w-full table-fixed">
           <TableHeader>
-            <TableRow className="bg-gray-50">
+            <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
               <TableHead
-                className="text-center cursor-pointer hover:bg-gray-100 select-none"
+                className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 cursor-pointer hover:bg-slate-100 select-none"
                 onClick={() => handleSort('n_convenio')}
               >
                 <div className="flex items-center justify-center">
@@ -643,7 +730,7 @@ export default function Cartera() {
                 </div>
               </TableHead>
               <TableHead
-                className="text-center cursor-pointer hover:bg-gray-100 select-none"
+                className="w-[24%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 cursor-pointer hover:bg-slate-100 select-none"
                 onClick={() => handleSort('nombre_completo')}
               >
                 <div className="flex items-center justify-center">
@@ -651,12 +738,12 @@ export default function Cartera() {
                   {renderSortIcon('nombre_completo')}
                 </div>
               </TableHead>
-              <TableHead className="text-center">Cédula</TableHead>
-              <TableHead className="text-center">Corporación</TableHead>
-              <TableHead className="text-center">Monto Esperado</TableHead>
-              <TableHead className="text-center">Monto Aportado</TableHead>
-              <TableHead className="text-center">Estado</TableHead>
-              <TableHead className="text-center">Última Fecha</TableHead>
+              <TableHead className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Cedula</TableHead>
+              <TableHead className="w-[10%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Corporacion</TableHead>
+              <TableHead className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Monto esperado</TableHead>
+              <TableHead className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Monto aportado</TableHead>
+              <TableHead className="w-[10%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Estado</TableHead>
+              <TableHead className="w-[10%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Ultima fecha</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -668,27 +755,27 @@ export default function Cartera() {
               </TableRow>
             ) : (
               data.map((item) => (
-                <TableRow key={item.id_benefactor}>
-                  <TableCell className="text-center">
+                <TableRow key={item.id_benefactor} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                  <TableCell className="px-3 py-4 text-center">
                     <Button
                       variant="link"
-                      className="font-mono text-sm p-0 h-auto text-blue-600 hover:text-blue-800"
+                      className="h-auto p-0 font-mono text-sm text-[#1b76b9] hover:text-[#155a8a]"
                       onClick={() => handleVerHistorial(item.id_benefactor, item.nombre_completo)}
                     >
                       {item.n_convenio || item.cedula}
                     </Button>
                   </TableCell>
-                  <TableCell className="text-center font-medium">{item.nombre_completo}</TableCell>
-                  <TableCell className="text-center font-mono text-sm">{item.cedula}</TableCell>
-                  <TableCell className="text-center">{item.corporacion || "N/A"}</TableCell>
-                  <TableCell className="text-center">{formatCurrency(item.monto_esperado)}</TableCell>
-                  <TableCell className="text-center font-semibold text-green-600">
+                  <TableCell className="px-3 py-4 text-center text-sm font-semibold leading-snug text-slate-900 break-words">{item.nombre_completo}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-mono text-sm text-slate-600 break-all">{item.cedula}</TableCell>
+                  <TableCell className="px-3 py-4 text-center text-sm text-slate-600 break-words">{item.corporacion || "N/A"}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-medium text-slate-700">{formatCurrency(item.monto_esperado)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-semibold text-green-600">
                     {formatCurrency(item.monto_aportado)}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="px-3 py-4 text-center">
                     {item.estado_cobro ? getEstadoCobroBadge(item.estado_cobro) : getEstadoBadge(item.estado_aporte)}
                   </TableCell>
-                  <TableCell className="text-center">{formatDate(item.ultima_fecha_aporte)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center text-sm text-slate-600">{formatDate(item.ultima_fecha_aporte)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -704,20 +791,20 @@ export default function Cartera() {
           </div>
         ) : (
           data.map((item) => (
-            <Card key={item.id_benefactor} className="border-2 overflow-hidden">
+            <Card key={item.id_benefactor} className="overflow-hidden border border-slate-200 shadow-sm">
               <CardContent className="p-4 space-y-3">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <Button
                       variant="link"
-                      className="font-mono text-sm p-0 h-auto text-blue-600"
+                      className="h-auto p-0 font-mono text-sm text-[#1b76b9] hover:text-[#155a8a]"
                       onClick={() => handleVerHistorial(item.id_benefactor, item.nombre_completo)}
                     >
                       <History className="h-3 w-3 mr-1" />
                       {item.n_convenio || item.cedula}
                     </Button>
-                    <p className="font-semibold text-lg break-words mt-1">{item.nombre_completo}</p>
-                    <p className="text-sm text-gray-600 font-mono break-all">{item.cedula}</p>
+                    <p className="mt-1 break-words text-lg font-semibold text-slate-900">{item.nombre_completo}</p>
+                    <p className="break-all font-mono text-sm text-slate-600">{item.cedula}</p>
                   </div>
                   {item.estado_cobro ? getEstadoCobroBadge(item.estado_cobro) : getEstadoBadge(item.estado_aporte)}
                 </div>
@@ -748,15 +835,16 @@ export default function Cartera() {
 
       {/* Paginación */}
       {filteredData.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
             Mostrando {pageIndex * pageSize + 1} a{" "}
             {Math.min((pageIndex + 1) * pageSize, filteredData.length)} de {filteredData.length} registros
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm">
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => setPageIndex(0)}
               disabled={!canPreviousPage}
             >
@@ -765,17 +853,19 @@ export default function Cartera() {
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => setPageIndex(pageIndex - 1)}
               disabled={!canPreviousPage}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm text-gray-600">
+            <span className="px-2 text-sm font-medium text-slate-600">
               Página {pageIndex + 1} de {totalPages}
             </span>
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => setPageIndex(pageIndex + 1)}
               disabled={!canNextPage}
             >
@@ -784,6 +874,7 @@ export default function Cartera() {
             <Button
               variant="outline"
               size="sm"
+              className="border-slate-300"
               onClick={() => setPageIndex(totalPages - 1)}
               disabled={!canNextPage}
             >
@@ -797,7 +888,7 @@ export default function Cartera() {
               setPageIndex(0);
             }}
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-36 border-slate-300 bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -813,6 +904,155 @@ export default function Cartera() {
     </>
   );
 
+  const renderHistoricoTable = () => (
+    <>
+      <div className="hidden xl:block">
+        <Table className="w-full table-fixed">
+          <TableHeader>
+            <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+              <TableHead className="w-[9%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Periodo</TableHead>
+              <TableHead className="w-[10%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Ultima fecha</TableHead>
+              <TableHead className="w-[8%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Convenio</TableHead>
+              <TableHead className="w-[22%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Benefactor</TableHead>
+              <TableHead className="w-[11%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Cedula</TableHead>
+              <TableHead className="w-[8%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Tipo</TableHead>
+              <TableHead className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Monto esperado</TableHead>
+              <TableHead className="w-[12%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Monto aportado</TableHead>
+              <TableHead className="w-[8%] px-3 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">Estado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {historicoData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-8 text-center text-gray-500">
+                  No hay registros historicos para mostrar
+                </TableCell>
+              </TableRow>
+            ) : (
+              historicoData.map((item) => (
+                <TableRow key={`${item.id_estado}-${item.id_benefactor}`} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                  <TableCell className="px-3 py-4 text-center text-sm text-slate-700">{item.periodo || formatMesAnio(item.mes, item.anio)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center text-sm text-slate-600">{formatDate(item.fecha_transmision)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-mono text-sm text-slate-700">{item.n_convenio || "N/A"}</TableCell>
+                  <TableCell className="px-3 py-4 text-center text-sm font-semibold leading-snug text-slate-900 break-words">{item.nombre_completo}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-mono text-sm text-slate-600 break-all">{item.cedula}</TableCell>
+                  <TableCell className="px-3 py-4 text-center text-sm text-slate-600">{item.tipo_benefactor}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-medium text-slate-700">{formatCurrencySafe(item.monto_esperado)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center font-semibold text-green-600">{formatCurrencySafe(item.monto_aportado)}</TableCell>
+                  <TableCell className="px-3 py-4 text-center">{getEstadoBadge(item.estado_aporte)}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="xl:hidden space-y-4 p-6">
+        {historicoData.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No hay registros historicos para mostrar
+          </div>
+        ) : (
+          historicoData.map((item) => (
+            <Card key={`historico-${item.id_estado}-${item.id_benefactor}`} className="overflow-hidden border border-slate-200 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono text-[#1b76b9]">{item.n_convenio || "N/A"}</p>
+                    <p className="mt-1 break-words text-lg font-semibold text-slate-900">{item.nombre_completo}</p>
+                    <p className="break-all font-mono text-sm text-slate-600">{item.cedula}</p>
+                  </div>
+                  {getEstadoBadge(item.estado_aporte)}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-gray-500">Periodo</p>
+                    <p className="font-semibold">{item.periodo || formatMesAnio(item.mes, item.anio)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Ultima fecha</p>
+                    <p className="font-semibold">{formatDate(item.fecha_transmision)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Monto esperado</p>
+                    <p className="font-semibold">{formatCurrencySafe(item.monto_esperado)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Monto aportado</p>
+                    <p className="font-semibold text-green-600">{formatCurrencySafe(item.monto_aportado)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500">Tipo benefactor</p>
+                    <p className="text-sm">{item.tipo_benefactor}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {historicoTotalRecords > 0 && (
+        <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600">
+            Mostrando {historicoPageIndex * historicoPageSize + 1} a{" "}
+            {Math.min((historicoPageIndex + 1) * historicoPageSize, historicoTotalRecords)} de {historicoTotalRecords} registros
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm">
+            <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setHistoricoPageIndex(0)} disabled={historicoPageIndex === 0}>
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setHistoricoPageIndex((prev) => Math.max(prev - 1, 0))} disabled={historicoPageIndex === 0}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="px-2 text-sm font-medium text-slate-600">
+              Pagina {historicoPageIndex + 1} de {historicoTotalPages}
+            </span>
+            <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setHistoricoPageIndex((prev) => Math.min(prev + 1, historicoTotalPages - 1))} disabled={historicoPageIndex >= historicoTotalPages - 1}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setHistoricoPageIndex(Math.max(historicoTotalPages - 1, 0))} disabled={historicoPageIndex >= historicoTotalPages - 1}>
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Select
+            value={historicoPageSize.toString()}
+            onValueChange={(value) => {
+              setHistoricoPageSize(Number(value));
+              setHistoricoPageIndex(0);
+            }}
+          >
+            <SelectTrigger className="w-36 border-slate-300 bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 30, 50].map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size} por pagina
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </>
+  );
+
+  const statsToRender = activeTab === "historico"
+    ? {
+        totalBenefactores: String(historicoSummary?.total_benefactores ?? 0),
+        totalEsperado: formatCurrency(historicoSummary?.total_esperado || "0"),
+        totalRecaudado: formatCurrency(historicoSummary?.total_recaudado || "0"),
+        porcentajeRecaudacion: `${historicoSummary?.porcentaje_recaudacion || "0.00"}%`,
+      }
+    : {
+        totalBenefactores: String(estadisticas?.total_benefactores || 0),
+        totalEsperado: formatCurrency(estadisticas?.total_esperado || "0"),
+        totalRecaudado: formatCurrency(estadisticas?.total_recaudado || "0"),
+        porcentajeRecaudacion: `${estadisticas?.porcentaje_recaudacion || "0"}%`,
+      };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -827,14 +1067,16 @@ export default function Cartera() {
   return (
     <div className="space-y-6 w-full overflow-hidden">
       <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Cartera de Aportes</h1>
-            <p className="text-white/90">Estado de aportes mensuales de benefactores</p>
+            <p className="text-white/90">
+              {activeTab === "historico" ? "Historico completo de aportes de benefactores" : "Estado de aportes mensuales de benefactores"}
+            </p>
           </div>
           <Button
             onClick={handleAbrirModalImportacion}
-            className="bg-white text-[#1b76b9] hover:bg-gray-100"
+            className="bg-white text-[#1b76b9] hover:bg-gray-100 w-full sm:w-auto"
           >
             <Upload className="h-4 w-4 mr-2" />
             Importar Débitos
@@ -842,7 +1084,12 @@ export default function Cartera() {
         </div>
       </div>
 
-      {estadisticas && (
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "actual" | "historico")} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 bg-white shadow-sm">
+          <TabsTrigger value="actual">Actual</TabsTrigger>
+          <TabsTrigger value="historico">Historico</TabsTrigger>
+        </TabsList>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="bg-white border-gray-200 hover:shadow-lg transition-shadow">
             <CardContent className="p-6">
@@ -852,7 +1099,7 @@ export default function Cartera() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 font-medium">Total Benefactores</p>
-                  <p className="text-3xl font-bold text-gray-900">{estadisticas.total_benefactores}</p>
+                  <p className="text-3xl font-bold text-gray-900">{statsToRender.totalBenefactores}</p>
                 </div>
               </div>
             </CardContent>
@@ -867,7 +1114,7 @@ export default function Cartera() {
                 <div>
                   <p className="text-sm text-gray-600 font-medium">Total Esperado</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(estadisticas.total_esperado)}
+                    {statsToRender.totalEsperado}
                   </p>
                 </div>
               </div>
@@ -883,7 +1130,7 @@ export default function Cartera() {
                 <div>
                   <p className="text-sm text-gray-600 font-medium">Total Recaudado</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(estadisticas.total_recaudado)}
+                    {statsToRender.totalRecaudado}
                   </p>
                 </div>
               </div>
@@ -899,18 +1146,18 @@ export default function Cartera() {
                 <div>
                   <p className="text-sm text-gray-600 font-medium">% Recaudación</p>
                   <p className="text-3xl font-bold text-indigo-700">
-                    {estadisticas.porcentaje_recaudacion}%
+                    {statsToRender.porcentajeRecaudacion}
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-      )}
 
+      <TabsContent value="actual" className="space-y-6">
       {/* Filtros */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -934,6 +1181,7 @@ export default function Cartera() {
             <Button
               variant="outline"
               size="icon"
+              className="w-full xl:w-10"
               onClick={() => {
                 setSearchTerm("");
                 setEstadoFilter("todos");
@@ -946,13 +1194,88 @@ export default function Cartera() {
       </div>
 
       {/* Tabla de cartera */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+          <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-slate-800">Estado de cartera</p>
+              <p>Consulta rápidamente convenios, aportes y estado del cobro mensual.</p>
+            </div>
+            <Badge className="w-fit bg-sky-100 text-sky-800 hover:bg-sky-100">
+              {filteredData.length} registro{filteredData.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+        </div>
         {renderTable(paginatedData)}
       </div>
+      </TabsContent>
+
+      <TabsContent value="historico" className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_200px_180px_180px_auto]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar por nombre, cedula o convenio..."
+                value={historicoSearchTerm}
+                onChange={(e) => setHistoricoSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={historicoEstadoFilter} onValueChange={setHistoricoEstadoFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filtrar por estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los estados</SelectItem>
+                <SelectItem value="APORTADO">Aportado</SelectItem>
+                <SelectItem value="NO_APORTADO">No aportado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input type="date" value={historicoFechaDesde} onChange={(e) => setHistoricoFechaDesde(e.target.value)} />
+            <Input type="date" value={historicoFechaHasta} onChange={(e) => setHistoricoFechaHasta(e.target.value)} />
+            {(historicoSearchTerm || historicoEstadoFilter !== "todos" || historicoFechaDesde || historicoFechaHasta) && (
+              <Button
+                variant="outline"
+                className="w-full xl:w-auto"
+                onClick={() => {
+                  setHistoricoSearchTerm("");
+                  setHistoricoEstadoFilter("todos");
+                  setHistoricoFechaDesde("");
+                  setHistoricoFechaHasta("");
+                }}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Limpiar
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold text-slate-800">Historico de aportes</p>
+                <p>Consulta todos los meses usando rango exacto por fecha de transmision.</p>
+              </div>
+              <Badge className="w-fit bg-sky-100 text-sky-800 hover:bg-sky-100">
+                {historicoTotalRecords} registro{historicoTotalRecords === 1 ? "" : "s"}
+              </Badge>
+            </div>
+          </div>
+          {historicoLoading ? (
+            <div className="flex items-center justify-center py-12 text-gray-500">Cargando historico...</div>
+          ) : (
+            renderHistoricoTable()
+          )}
+        </div>
+      </TabsContent>
+      </Tabs>
 
       {/* Modal Historial de Aportes */}
       <Dialog open={historialOpen} onOpenChange={setHistorialOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-[96vw] xl:max-w-[1400px] max-h-[92vh] overflow-y-auto p-5 sm:p-6">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[96vw] xl:max-w-[1400px] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="h-5 w-5" />
@@ -1000,43 +1323,43 @@ export default function Cartera() {
                   </CardContent>
                 </Card>
               </div>
-              <div className="overflow-x-auto rounded-lg border border-gray-200 max-h-[52vh]">
-                <Table>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[52vh]">
+                <Table className="min-w-[920px]">
                   <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead>Periodo</TableHead>
-                      <TableHead className="text-right">Esperado</TableHead>
-                      <TableHead className="text-right">Aportado</TableHead>
-                      <TableHead className="text-center">Exitosos</TableHead>
-                      <TableHead className="text-center">Fallidos</TableHead>
-                      <TableHead>Ultima Fecha</TableHead>
-                      <TableHead>Estado</TableHead>
+                    <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                      <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Periodo</TableHead>
+                      <TableHead className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Esperado</TableHead>
+                      <TableHead className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Aportado</TableHead>
+                      <TableHead className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Exitosos</TableHead>
+                      <TableHead className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Fallidos</TableHead>
+                      <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Ultima fecha</TableHead>
+                      <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Estado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {historialData.map((registro, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
+                      <TableRow key={idx} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                        <TableCell className="px-4 py-4 font-medium text-slate-900">
                           {formatMesAnio(registro.mes, registro.anio)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="px-4 py-4 text-right text-slate-700">
                           {formatCurrency(registro.monto_esperado)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-green-600">
+                        <TableCell className="px-4 py-4 text-right font-semibold text-green-600">
                           {formatCurrency(registro.monto_aportado)}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="px-4 py-4 text-center">
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 min-w-10 justify-center">
                             {registro.aportes_exitosos}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="px-4 py-4 text-center">
                           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 min-w-10 justify-center">
                             {registro.aportes_fallidos}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatDate(registro.ultima_fecha_aporte)}</TableCell>
-                        <TableCell>{getEstadoBadge(registro.estado_aporte)}</TableCell>
+                        <TableCell className="px-4 py-4 text-slate-600">{formatDate(registro.ultima_fecha_aporte)}</TableCell>
+                        <TableCell className="px-4 py-4">{getEstadoBadge(registro.estado_aporte)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1048,7 +1371,7 @@ export default function Cartera() {
       </Dialog>
       {/* Modal único de validación y confirmación */}
       <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-[#1b76b9]" />
@@ -1100,7 +1423,7 @@ export default function Cartera() {
             {/* Información del archivo */}
             {archivoSeleccionado && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Nombre del archivo</p>
                     <p className="font-semibold text-gray-900">{archivoSeleccionado.name}</p>
@@ -1229,7 +1552,7 @@ export default function Cartera() {
             )}
 
             {/* Botones */}
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={handleCerrarModalImportacion}

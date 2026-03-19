@@ -278,14 +278,14 @@ export default function Aprobaciones() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
+      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-4 sm:p-6 shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Aprobaciones</h1>
             <p className="text-white/90">Gestión de aprobación de registros pendientes</p>
           </div>
           {pendientes.length > 0 && puedeAprobar && (
-          <div className="flex gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleAprobarTodos} disabled={submitting}>
               <CheckCircle className="h-4 w-4 mr-2" />
               Aprobar Todos
@@ -299,27 +299,10 @@ export default function Aprobaciones() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
-                <Clock className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pendientes</p>
-                <p className="text-3xl font-bold text-orange-600">{pendientes.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Filtros */}
       {pendientes.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -343,6 +326,7 @@ export default function Aprobaciones() {
               <Button
                 variant="outline"
                 size="icon"
+                className="w-full xl:w-10"
                 onClick={() => {
                   setSearchTerm("");
                   setTipoFilter("todos");
@@ -373,14 +357,26 @@ export default function Aprobaciones() {
           </CardContent>
         </Card>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold text-slate-800">Registros pendientes de revisión</p>
+                <p>Revisa la información antes de aprobar o rechazar cada solicitud.</p>
+              </div>
+              <Badge className="w-fit bg-amber-100 text-amber-800 hover:bg-amber-100">
+                {pendientesFiltrados.length} pendiente{pendientesFiltrados.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
+          </div>
+
           {/* Vista desktop - Tabla */}
           <div className="hidden md:block overflow-x-auto">
-            <Table className="table-fixed w-full">
+            <Table className="min-w-[1080px] table-fixed">
                 <TableHeader>
-                  <TableRow className="bg-gray-50">
+                  <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
                     <TableHead
-                      className="w-[11%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                      className="w-[11%] cursor-pointer select-none px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 hover:bg-slate-100"
                       onClick={() => handleSort('n_convenio')}
                     >
                       <div className="flex items-center justify-center">
@@ -389,7 +385,7 @@ export default function Aprobaciones() {
                       </div>
                     </TableHead>
                     <TableHead
-                      className="w-[17%] text-center cursor-pointer hover:bg-gray-100 select-none"
+                      className="w-[17%] cursor-pointer select-none px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 hover:bg-slate-100"
                       onClick={() => handleSort('nombre_completo')}
                     >
                       <div className="flex items-center justify-center">
@@ -397,7 +393,6 @@ export default function Aprobaciones() {
                         {renderSortIcon('nombre_completo')}
                       </div>
                     </TableHead>
-                    <TableHead className="w-[12%] text-center">Cédula</TableHead>
                     <TableHead className="w-[12%] text-center">Cédula</TableHead>
                     <TableHead className="w-[9%] text-center">Tipo</TableHead>
                     <TableHead className="w-[11%] text-center">Ejecutivo</TableHead>
@@ -408,22 +403,22 @@ export default function Aprobaciones() {
 
                 <TableBody>
                   {paginatedData.map((benefactor) => (
-                    <TableRow key={benefactor.id_benefactor}>
-                      <TableCell className="font-medium truncate text-center">{benefactor.n_convenio || "N/A"}</TableCell>
-                      <TableCell className="font-medium truncate text-center">{benefactor.nombre_completo}</TableCell>
-                      <TableCell className="truncate text-center">{benefactor.cedula}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="mx-auto" variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
+                    <TableRow key={benefactor.id_benefactor} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                      <TableCell className="px-4 py-4 text-center font-mono text-sm font-semibold text-slate-700">{benefactor.n_convenio || "N/A"}</TableCell>
+                      <TableCell className="px-4 py-4 text-center font-semibold text-slate-900">{benefactor.nombre_completo}</TableCell>
+                      <TableCell className="px-4 py-4 text-center font-mono text-sm text-slate-600">{benefactor.cedula}</TableCell>
+                      <TableCell className="px-4 py-4 text-center">
+                        <Badge className="mx-auto min-w-[96px] justify-center" variant={benefactor.tipo_benefactor === "TITULAR" ? "default" : "secondary"}>
                           {benefactor.tipo_benefactor}
                         </Badge>
                       </TableCell>
-                      <TableCell className="truncate text-center">{benefactor.ejecutivo || "N/A"}</TableCell>
-                      <TableCell className="truncate text-center">{benefactor.fecha_suscripcion ? formatDate(benefactor.fecha_suscripcion) : "N/A"}</TableCell>
+                      <TableCell className="px-4 py-4 text-center text-sm text-slate-600">{benefactor.ejecutivo || "N/A"}</TableCell>
+                      <TableCell className="px-4 py-4 text-center text-sm text-slate-600">{benefactor.fecha_suscripcion ? formatDate(benefactor.fecha_suscripcion) : "N/A"}</TableCell>
 
-                      <TableCell className="text-center px-2">
-                        <div className="flex gap-1.5 justify-center flex-nowrap">
+                      <TableCell className="px-4 py-4 text-center">
+                        <div className="flex flex-wrap justify-center gap-2">
                           {/* ✅ Preview en Dialog (no redirección) */}
-                          <Button size="sm" variant="outline" className="whitespace-nowrap px-2" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
+                          <Button size="sm" variant="outline" className="rounded-full border-slate-300 px-3 text-slate-700 hover:bg-slate-100" onClick={() => handleOpenPreview(benefactor.id_benefactor)}>
                             <Eye className="h-4 w-4 mr-1" />
                             Detalles
                           </Button>
@@ -432,7 +427,7 @@ export default function Aprobaciones() {
                             <>
                               <Button
                                 size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap px-2"
+                                className="rounded-full bg-green-600 px-3 text-white hover:bg-green-700"
                                 onClick={() => handleOpenDialog(benefactor, "APROBADO")}
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
@@ -440,7 +435,7 @@ export default function Aprobaciones() {
                               </Button>
                               <Button
                                 size="sm"
-                                className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap px-2"
+                                className="rounded-full bg-red-600 px-3 text-white hover:bg-red-700"
                                 onClick={() => handleOpenDialog(benefactor, "RECHAZADO")}
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
@@ -459,14 +454,14 @@ export default function Aprobaciones() {
             </div>
 
             {/* Vista móvil - Cards */}
-            <div className="md:hidden p-6 space-y-4">
+            <div className="md:hidden p-4 sm:p-6 space-y-4">
               {paginatedData.map((benefactor) => (
-                <Card key={benefactor.id_benefactor} className="border-2 border-orange-200">
+                <Card key={benefactor.id_benefactor} className="overflow-hidden border border-slate-200 shadow-sm">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-semibold text-lg">{benefactor.nombre_completo}</p>
-                        <p className="text-sm text-gray-600">{benefactor.cedula}</p>
+                        <p className="font-semibold text-lg text-slate-900">{benefactor.nombre_completo}</p>
+                        <p className="text-sm text-slate-600">{benefactor.cedula}</p>
                       </div>
                       <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                         <Clock className="h-3 w-3 mr-1" />
@@ -474,7 +469,7 @@ export default function Aprobaciones() {
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-xs text-gray-500">N° Convenio</p>
                         <p className="font-medium">{benefactor.n_convenio || "N/A"}</p>
@@ -487,7 +482,7 @@ export default function Aprobaciones() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-xs text-gray-500">Ejecutivo</p>
                         <p className="font-medium">{benefactor.ejecutivo || "N/A"}</p>
@@ -504,7 +499,7 @@ export default function Aprobaciones() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full"
+                        className="w-full border-slate-300 text-slate-700 hover:bg-slate-100"
                         onClick={() => handleOpenPreview(benefactor.id_benefactor)}
                       >
                         <Eye className="h-4 w-4 mr-1" />
@@ -512,7 +507,7 @@ export default function Aprobaciones() {
                       </Button>
 
                       {puedeAprobar ? (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white flex-1"
@@ -541,15 +536,16 @@ export default function Aprobaciones() {
 
           {/* Paginación */}
           {pendientesFiltrados.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-              <div className="text-sm text-gray-600">
+            <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-600">
                 Mostrando {pageIndex * pageSize + 1} a{" "}
                 {Math.min((pageIndex + 1) * pageSize, pendientesFiltrados.length)} de {pendientesFiltrados.length} registros
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:justify-start">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="border-slate-300"
                   onClick={() => setPageIndex(0)}
                   disabled={!canPreviousPage}
                 >
@@ -558,17 +554,19 @@ export default function Aprobaciones() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="border-slate-300"
                   onClick={() => setPageIndex(pageIndex - 1)}
                   disabled={!canPreviousPage}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm text-gray-600">
+                <span className="px-2 text-sm font-medium text-slate-600">
                   Página {pageIndex + 1} de {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="border-slate-300"
                   onClick={() => setPageIndex(pageIndex + 1)}
                   disabled={!canNextPage}
                 >
@@ -577,6 +575,7 @@ export default function Aprobaciones() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="border-slate-300"
                   onClick={() => setPageIndex(totalPages - 1)}
                   disabled={!canNextPage}
                 >
@@ -590,7 +589,7 @@ export default function Aprobaciones() {
                   setPageIndex(0);
                 }}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-full sm:w-36 border-slate-300 bg-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -641,7 +640,7 @@ export default function Aprobaciones() {
               Cancelar
             </Button>
             <Button
-              className={accion === "APROBADO" ? "bg-green-600 hover:bg-green-700" : ""}
+              className={accion === "APROBADO" ? "bg-green-600 hover:bg-green-700 text-white" : ""}
               variant={accion === "RECHAZADO" ? "destructive" : "default"}
               onClick={handleSubmit}
               disabled={submitting}
@@ -654,7 +653,7 @@ export default function Aprobaciones() {
 
       {/* ✅ Dialog preview detalles (pop-out) */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-[950px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[950px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />

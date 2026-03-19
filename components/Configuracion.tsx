@@ -76,8 +76,10 @@ export default function Configuracion() {
   const [openCrearSucursal, setOpenCrearSucursal] = useState(false);
   const [openEditarSucursal, setOpenEditarSucursal] = useState(false);
   const [openAsignarSucursal, setOpenAsignarSucursal] = useState(false);
+  const [openConfirmarDeshabilitarUsuario, setOpenConfirmarDeshabilitarUsuario] = useState(false);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState<Sucursal | null>(null);
   const [usuarioParaAsignar, setUsuarioParaAsignar] = useState<number | null>(null);
+  const [usuarioPendienteDeshabilitar, setUsuarioPendienteDeshabilitar] = useState<UsuarioConPermisos | null>(null);
   const [sucursalIdAsignar, setSucursalIdAsignar] = useState("");
   const [formSucursal, setFormSucursal] = useState<CrearSucursalDto>({
     iniciales: "",
@@ -593,15 +595,40 @@ export default function Configuracion() {
   };
 
   const handleCambiarEstadoUsuario = async (usuario: UsuarioConPermisos, activo: boolean) => {
-    const accion = activo ? "activar" : "inactivar";
-    if (!confirm(`Deseas ${accion} al usuario ${usuario.nombre_usuario}?`)) return;
+    if (!activo) {
+      setUsuarioPendienteDeshabilitar(usuario);
+      setOpenConfirmarDeshabilitarUsuario(true);
+      return;
+    }
 
     try {
       await authService.cambiarEstadoUsuario(usuario.id_usuario, activo);
-      toast.success(`Usuario ${activo ? "activado" : "inactivado"} correctamente`);
+      toast.success(`Usuario ${activo ? "activado" : "deshabilitado"} correctamente`);
       await cargarUsuarios();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Error al cambiar estado del usuario");
+      toast.error(
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Error al cambiar estado del usuario"
+      );
+    }
+  };
+
+  const confirmarDeshabilitarUsuario = async () => {
+    if (!usuarioPendienteDeshabilitar) return;
+
+    try {
+      await authService.cambiarEstadoUsuario(usuarioPendienteDeshabilitar.id_usuario, false);
+      toast.success("Usuario deshabilitado correctamente");
+      setOpenConfirmarDeshabilitarUsuario(false);
+      setUsuarioPendienteDeshabilitar(null);
+      await cargarUsuarios();
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Error al cambiar estado del usuario"
+      );
     }
   };
 
@@ -625,50 +652,52 @@ export default function Configuracion() {
       </div>
 
       <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className={`grid w-full h-auto gap-2 p-2 ${puedeConfigurar ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7' : 'grid-cols-1 max-w-md'}`}>
-          <TabsTrigger value="perfil" className="text-sm sm:text-base py-3 px-4 gap-2">
+        <div className="overflow-x-auto pb-1">
+          <TabsList className={`flex h-auto min-w-max flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm ${puedeConfigurar ? 'w-full' : 'max-w-md'}`}>
+          <TabsTrigger value="perfil" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
             <User className="h-4 w-4" />
             Mi Perfil
           </TabsTrigger>
           {puedeConfigurar && (
-            <TabsTrigger value="roles" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="roles" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Administrar Roles</span>
               <span className="sm:hidden">Roles</span>
             </TabsTrigger>
           )}
           {puedeConfigurar && (
-            <TabsTrigger value="crear-usuario" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="crear-usuario" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <UserCog className="h-4 w-4" />
               <span className="hidden sm:inline">Crear Usuario</span>
               <span className="sm:hidden">Crear</span>
             </TabsTrigger>
           )}
           {puedeConfigurar && (
-            <TabsTrigger value="usuarios" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="usuarios" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <Users className="h-4 w-4" />
               Usuarios
             </TabsTrigger>
           )}
           {puedeConfigurar && (
-            <TabsTrigger value="sucursales" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="sucursales" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <Building2 className="h-4 w-4" />
               Sucursales
             </TabsTrigger>
           )}
           {puedeConfigurar && (
-            <TabsTrigger value="bancos" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="bancos" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <Landmark className="h-4 w-4" />
               Bancos
             </TabsTrigger>
           )}
           {puedeConfigurar && (
-            <TabsTrigger value="apariencia" className="text-sm sm:text-base py-3 px-4 gap-2">
+            <TabsTrigger value="apariencia" className="min-w-[140px] flex-1 text-xs sm:text-sm py-2.5 px-3 gap-2 xl:flex-none">
               <ImageIcon className="h-4 w-4" />
               Apariencia
             </TabsTrigger>
           )}
-        </TabsList>
+          </TabsList>
+        </div>
 
         {/* Perfil Tab */}
         <TabsContent value="perfil" className="mt-6">
@@ -1277,7 +1306,7 @@ export default function Configuracion() {
                           {usuario.activo !== false ? (
                             <Button variant="outline" size="sm" className="gap-2 text-orange-700" onClick={() => handleCambiarEstadoUsuario(usuario, false)}>
                               <XCircle className="h-4 w-4" />
-                              Inactivar
+                              Deshabilitar
                             </Button>
                           ) : (
                             <Button variant="outline" size="sm" className="gap-2 text-green-700" onClick={() => handleCambiarEstadoUsuario(usuario, true)}>
@@ -1762,6 +1791,7 @@ export default function Configuracion() {
                 </form>
               </DialogContent>
             </Dialog>
+
           </TabsContent>
         )}
 
@@ -1879,6 +1909,51 @@ export default function Configuracion() {
           </TabsContent>
         )}
       </Tabs>
+
+      <Dialog
+        open={openConfirmarDeshabilitarUsuario}
+        onOpenChange={(open) => {
+          setOpenConfirmarDeshabilitarUsuario(open);
+          if (!open) {
+            setUsuarioPendienteDeshabilitar(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Deshabilitar usuario</DialogTitle>
+            <DialogDescription>
+              {usuarioPendienteDeshabilitar
+                ? `Estas a punto de deshabilitar a ${usuarioPendienteDeshabilitar.nombre_usuario}. El usuario no podra volver a iniciar sesion mientras permanezca inactivo.`
+                : "Confirma la deshabilitacion del usuario."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Antes de continuar, verifica que el usuario no tenga benefactores activos ni casos sociales abiertos.
+          </div>
+
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOpenConfirmarDeshabilitarUsuario(false);
+                setUsuarioPendienteDeshabilitar(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#B42318] hover:bg-[#912018] text-white"
+              onClick={confirmarDeshabilitarUsuario}
+            >
+              Deshabilitar usuario
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

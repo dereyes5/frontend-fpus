@@ -35,16 +35,8 @@ function normalizarTipoEvento(v: string) {
 
 function badgeEstado(estado?: string) {
   if (estado === "Activo") return "bg-green-600 text-white";
-  if (estado === "En seguimiento") return "bg-yellow-500 text-white";
   if (estado === "Cerrado") return "bg-gray-500 text-white";
   return "bg-gray-400 text-white";
-}
-
-function badgePrioridad(prioridad?: string) {
-  if (prioridad === "Alta") return "bg-red-500 text-white";
-  if (prioridad === "Media") return "bg-orange-500 text-white";
-  if (prioridad === "Baja") return "bg-blue-500 text-white";
-  return "bg-gray-500 text-white";
 }
 
 const API_BASE = "http://154.12.234.100:3000";
@@ -82,7 +74,12 @@ export default function SocialSeguimiento() {
     try {
       setLoadingCasos(true);
       const response = await socialService.obtenerCasosSociales();
-      const lista: BeneficiarioSocial[] = Array.isArray(response?.beneficiarios) ? response.beneficiarios : [];
+      const lista: BeneficiarioSocial[] = Array.isArray(response?.beneficiarios)
+        ? response.beneficiarios.map((caso: BeneficiarioSocial) => ({
+            ...caso,
+            estado: String(caso.estado) === "En seguimiento" ? "Activo" : caso.estado,
+          }))
+        : [];
       setCasos(lista);
       if (!casoSeleccionado && lista.length > 0) {
         setCasoSeleccionado(String(lista[0].id_beneficiario_social));
@@ -182,13 +179,13 @@ export default function SocialSeguimiento() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
+      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-4 sm:p-6 shadow-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Seguimiento de Casos</h1>
             <p className="text-white/90">Bitacora de seguimiento y evidencias de casos sociales</p>
           </div>
-          <Button variant="outline" className="bg-white text-[#1D1D1D]" onClick={() => casoSeleccionado && cargarSeguimientos(Number(casoSeleccionado))} disabled={loadingSeguimientos || !casoSeleccionado}>
+          <Button variant="outline" className="w-full bg-white text-[#1D1D1D] sm:w-auto" onClick={() => casoSeleccionado && cargarSeguimientos(Number(casoSeleccionado))} disabled={loadingSeguimientos || !casoSeleccionado}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loadingSeguimientos ? "animate-spin" : ""}`} />
             Recargar historial
           </Button>
@@ -217,7 +214,7 @@ export default function SocialSeguimiento() {
       </div>
 
       <Card>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 sm:p-6 space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-2">
               <Label>Caso social</Label>
@@ -247,7 +244,7 @@ export default function SocialSeguimiento() {
 
           {casoActual && (
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-sm text-gray-500">Caso seleccionado</p>
                   <p className="text-lg font-semibold text-gray-900">{casoActual.nombre_completo}</p>
@@ -258,7 +255,6 @@ export default function SocialSeguimiento() {
                   <p className="text-sm text-gray-600 mt-1">{casoActual.ciudad || "-"} · {casoActual.provincia || "-"}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge className={badgePrioridad(casoActual.prioridad)}>{casoActual.prioridad}</Badge>
                   <Badge className={badgeEstado(casoActual.estado)}>{casoActual.estado}</Badge>
                   <Badge className="bg-[#4064E3] text-white">{casoActual.tipo_caso}</Badge>
                 </div>
@@ -276,7 +272,7 @@ export default function SocialSeguimiento() {
 
       <ProtectedAction permiso={["social_ingresar", "social_administrar"]}>
         <Card>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Agregar seguimiento</h2>
@@ -350,7 +346,7 @@ export default function SocialSeguimiento() {
       </ProtectedAction>
 
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-gray-500" />
@@ -373,7 +369,7 @@ export default function SocialSeguimiento() {
           <div className="space-y-4">
             {!loadingSeguimientos && seguimientosFiltrados.map((seg) => (
               <div key={seg.id_seguimiento} className="relative border border-gray-200 rounded-xl p-4 bg-white">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <Badge className="bg-[#1b76b9] text-white">{seg.tipo_evento}</Badge>
@@ -383,8 +379,8 @@ export default function SocialSeguimiento() {
                       Por: <span className="font-medium text-gray-800">{seg.responsable || `usuario_${seg.id_usuario}`}</span>
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 inline-flex items-center gap-1 whitespace-nowrap">
+                  <div className="flex items-center justify-between gap-2 sm:justify-start">
+                    <span className="text-xs text-gray-500 inline-flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" />
                       {new Date(seg.fecha_evento).toLocaleDateString("es-EC")}
                     </span>
@@ -425,7 +421,7 @@ export default function SocialSeguimiento() {
                               <img
                                 src={buildSeguimientoFileUrl(foto.ruta_archivo)}
                                 alt={foto.nombre_archivo}
-                                className="w-full max-w-[280px] rounded border border-gray-200 object-cover"
+                                className="w-full max-w-full sm:max-w-[280px] rounded border border-gray-200 object-cover"
                                 loading="lazy"
                               />
                             </a>

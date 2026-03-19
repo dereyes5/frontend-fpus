@@ -1,16 +1,12 @@
 import api from './api';
 
 /**
- * Servicio para gestión de notificaciones
+ * Servicio para gestion de notificaciones
  */
-
-// ==========================================
-// NOTIFICACIONES DEL USUARIO
-// ==========================================
 
 export const obtenerNotificaciones = async (soloNoLeidas = false) => {
   const response = await api.get('/notificaciones', {
-    params: { no_leidas: soloNoLeidas }
+    params: { no_leidas: soloNoLeidas },
   });
   return response.data;
 };
@@ -39,10 +35,6 @@ export const obtenerEstadisticas = async () => {
   const response = await api.get('/notificaciones/estadisticas');
   return response.data;
 };
-
-// ==========================================
-// ADMINISTRACIÓN (SOLO ADMINS)
-// ==========================================
 
 export const generarNotificacionesCumpleanos = async () => {
   const response = await api.post('/notificaciones/cumpleanos/generar');
@@ -80,5 +72,5 @@ export default {
   obtenerEstadisticas,
   generarNotificacionesCumpleanos,
   enviarNotificacion,
-  enviarBroadcast
+  enviarBroadcast,
 };

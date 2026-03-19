@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle,
-  Clock,
   Eye,
   Search,
   X,
@@ -26,13 +25,6 @@ import socialService from "../services/social.service";
 import type { BeneficiarioSocial, CasoSocialPendiente } from "../types";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
-
-function colorPrioridad(prioridad?: string) {
-  if (prioridad === "Alta") return "bg-red-500 text-white";
-  if (prioridad === "Media") return "bg-orange-500 text-white";
-  if (prioridad === "Baja") return "bg-blue-500 text-white";
-  return "bg-gray-500 text-white";
-}
 
 const API_BASE = "http://154.12.234.100:3000";
 
@@ -204,13 +196,13 @@ export default function SocialAprobaciones() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-6 shadow-md">
+      <div className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] rounded-xl p-4 sm:p-6 shadow-md">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Aprobaciones Social</h1>
             <p className="text-white/90">Gestion de aprobacion de casos sociales pendientes</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
             {pendientes.length > 0 && (
               <>
                 <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => procesarMasivo("aprobar")} disabled={submitting}>
@@ -227,25 +219,9 @@ export default function SocialAprobaciones() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
-                <Clock className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pendientes</p>
-                <p className="text-3xl font-bold text-orange-600">{pendientes.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {pendientes.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -270,6 +246,7 @@ export default function SocialAprobaciones() {
               <Button
                 variant="outline"
                 size="icon"
+                className="w-full xl:w-10"
                 onClick={() => {
                   setSearchTerm("");
                   setTipoFilter("todos");
@@ -305,45 +282,56 @@ export default function SocialAprobaciones() {
           </CardContent>
         </Card>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm [&_tr]:border-gray-200">
-          <div className="overflow-x-auto">
-            <Table className="table-auto w-full">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold text-slate-800">Casos sociales pendientes de aprobación</p>
+                <p>Consulta el detalle del caso antes de confirmar la decisión.</p>
+              </div>
+              <Badge className="w-fit bg-amber-100 text-amber-800 hover:bg-amber-100">
+                {pendientesFiltrados.length} pendiente{pendientesFiltrados.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
+            <Table className="min-w-[1080px] table-auto">
               <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="w-[22%] text-center">Beneficiario</TableHead>
-                  <TableHead className="w-[10%] text-center">Cedula</TableHead>
-                  <TableHead className="w-[18%] text-center">Tipo</TableHead>
-                  <TableHead className="w-[12%] text-center">Usuario</TableHead>
-                  <TableHead className="w-[10%] text-center">Ciudad</TableHead>
-                  <TableHead className="w-[10%] text-center">Fecha Registro</TableHead>
-                  <TableHead className="w-[18%] text-center">Acciones</TableHead>
+                <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                  <TableHead className="w-[22%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Beneficiario</TableHead>
+                  <TableHead className="w-[10%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Cedula</TableHead>
+                  <TableHead className="w-[18%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Tipo</TableHead>
+                  <TableHead className="w-[12%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Usuario</TableHead>
+                  <TableHead className="w-[10%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Ciudad</TableHead>
+                  <TableHead className="w-[10%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Fecha registro</TableHead>
+                  <TableHead className="w-[18%] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginated.map((caso) => (
-                  <TableRow key={caso.id_beneficiario_social}>
-                    <TableCell className="font-medium truncate text-center">{caso.nombre_completo}</TableCell>
-                    <TableCell className="truncate text-center">{caso.cedula || "N/A"}</TableCell>
-                    <TableCell className="text-center">
+                  <TableRow key={caso.id_beneficiario_social} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                    <TableCell className="px-4 py-4 text-center font-semibold text-slate-900">{caso.nombre_completo}</TableCell>
+                    <TableCell className="px-4 py-4 text-center font-mono text-sm text-slate-600">{caso.cedula || "N/A"}</TableCell>
+                    <TableCell className="px-4 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <span>{caso.tipo_caso}</span>
-                        <Badge className={colorPrioridad(caso.prioridad)}>{caso.prioridad}</Badge>
+                        <span className="text-sm text-slate-700">{caso.tipo_caso}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="truncate text-center">{caso.nombre_usuario_carga || `usuario_${caso.id_usuario_carga}`}</TableCell>
-                    <TableCell className="truncate text-center">{caso.ciudad || "-"}</TableCell>
-                    <TableCell className="truncate text-center">{caso.fecha_registro ? new Date(caso.fecha_registro).toLocaleDateString("es-EC") : "N/A"}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex gap-1 justify-center flex-nowrap">
-                        <Button size="sm" variant="outline" className="whitespace-nowrap px-2" onClick={() => abrirPreview(caso.id_beneficiario_social)}>
+                    <TableCell className="px-4 py-4 text-center text-sm text-slate-600">{caso.nombre_usuario_carga || `usuario_${caso.id_usuario_carga}`}</TableCell>
+                    <TableCell className="px-4 py-4 text-center text-sm text-slate-600">{caso.ciudad || "-"}</TableCell>
+                    <TableCell className="px-4 py-4 text-center text-sm text-slate-600">{caso.fecha_registro ? new Date(caso.fecha_registro).toLocaleDateString("es-EC") : "N/A"}</TableCell>
+                    <TableCell className="px-4 py-4 text-center">
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <Button size="sm" variant="outline" className="rounded-full border-slate-300 px-3 text-slate-700 hover:bg-slate-100" onClick={() => abrirPreview(caso.id_beneficiario_social)}>
                           <Eye className="h-4 w-4 mr-1" />
                           Ver
                         </Button>
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap px-2" onClick={() => abrirAccion(caso, "aprobar")}>
+                        <Button size="sm" className="rounded-full bg-green-600 px-3 text-white hover:bg-green-700" onClick={() => abrirAccion(caso, "aprobar")}>
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Aprobar
                         </Button>
-                        <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap px-2" onClick={() => abrirAccion(caso, "rechazar")}>
+                        <Button size="sm" className="rounded-full bg-red-600 px-3 text-white hover:bg-red-700" onClick={() => abrirAccion(caso, "rechazar")}>
                           <XCircle className="h-4 w-4 mr-1" />
                           Rechazar
                         </Button>
@@ -355,22 +343,68 @@ export default function SocialAprobaciones() {
             </Table>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t">
-            <div className="text-sm text-gray-600">
+          <div className="md:hidden p-4 sm:p-6 space-y-4">
+            {paginated.map((caso) => (
+              <Card key={`mobile-${caso.id_beneficiario_social}`} className="overflow-hidden border border-slate-200 shadow-sm">
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{caso.nombre_completo}</p>
+                      <p className="text-sm text-slate-600">{caso.cedula || "N/A"}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 xs:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Tipo</p>
+                      <p className="text-slate-800">{caso.tipo_caso}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Usuario</p>
+                      <p className="text-slate-800">{caso.nombre_usuario_carga || `usuario_${caso.id_usuario_carga}`}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Ciudad</p>
+                      <p className="text-slate-800">{caso.ciudad || "-"}</p>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex flex-col gap-2">
+                    <Button size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100" onClick={() => abrirPreview(caso.id_beneficiario_social)}>
+                      <Eye className="h-4 w-4 mr-1" />
+                      Ver detalle
+                    </Button>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => abrirAccion(caso, "aprobar")}>
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Aprobar
+                      </Button>
+                      <Button size="sm" className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={() => abrirAccion(caso, "rechazar")}>
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Rechazar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-slate-600">
               Mostrando {pageSafe * pageSize + 1} a {Math.min((pageSafe + 1) * pageSize, pendientesFiltrados.length)} de {pendientesFiltrados.length} registros
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPageIndex(0)} disabled={!canPreviousPage}>
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-sm sm:justify-start">
+              <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setPageIndex(0)} disabled={!canPreviousPage}>
                 <ChevronsLeft className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPageIndex(pageSafe - 1)} disabled={!canPreviousPage}>
+              <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setPageIndex(pageSafe - 1)} disabled={!canPreviousPage}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm text-gray-600">Pagina {pageSafe + 1} de {totalPages}</span>
-              <Button variant="outline" size="sm" onClick={() => setPageIndex(pageSafe + 1)} disabled={!canNextPage}>
+              <span className="px-2 text-sm font-medium text-slate-600">Pagina {pageSafe + 1} de {totalPages}</span>
+              <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setPageIndex(pageSafe + 1)} disabled={!canNextPage}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPageIndex(totalPages - 1)} disabled={!canNextPage}>
+              <Button variant="outline" size="sm" className="border-slate-300" onClick={() => setPageIndex(totalPages - 1)} disabled={!canNextPage}>
                 <ChevronsRight className="h-4 w-4" />
               </Button>
             </div>
@@ -381,7 +415,7 @@ export default function SocialAprobaciones() {
                 setPageIndex(0);
               }}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-full sm:w-36 border-slate-300 bg-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -438,7 +472,7 @@ export default function SocialAprobaciones() {
       </Dialog>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[720px]">
           <DialogHeader>
             <DialogTitle>Detalle del caso social</DialogTitle>
           </DialogHeader>
@@ -459,9 +493,8 @@ export default function SocialAprobaciones() {
                   <p className="font-medium">{previewCaso.tipo_caso}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Prioridad / Estado</p>
+                  <p className="text-gray-500">Estado</p>
                   <div className="flex gap-2 mt-1">
-                    <Badge className={colorPrioridad(previewCaso.prioridad)}>{previewCaso.prioridad}</Badge>
                     <Badge className="bg-gray-700 text-white">{previewCaso.estado}</Badge>
                   </div>
                 </div>
@@ -475,18 +508,23 @@ export default function SocialAprobaciones() {
                 </div>
               </div>
               <Separator />
-              {previewCaso.ficha_pdf_ruta && (
+              {Array.isArray(previewCaso.documentos) && previewCaso.documentos.length > 0 && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                  <p className="text-sm text-gray-700 mb-2">Ficha social adjunta</p>
-                  <a
-                    href={buildCasoArchivoUrl(previewCaso.ficha_pdf_ruta)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center px-3 py-1.5 rounded-md bg-[#1b76b9] hover:bg-[#155a8a] text-white text-sm"
-                    download
-                  >
-                    Descargar PDF
-                  </a>
+                  <p className="text-sm text-gray-700 mb-2">Documentos del levantamiento</p>
+                  <div className="space-y-2">
+                    {previewCaso.documentos.map((documento) => (
+                      <a
+                        key={documento.id_documento}
+                        href={buildCasoArchivoUrl(documento.ruta_archivo)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex w-full items-center px-3 py-1.5 rounded-md bg-[#1b76b9] hover:bg-[#155a8a] text-white text-sm"
+                        download
+                      >
+                        {documento.nombre_archivo}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
               <Separator />

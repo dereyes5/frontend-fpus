@@ -23,18 +23,17 @@ export default function Notificaciones() {
   const [cargando, setCargando] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Cargar notificaciones y contador
   const cargarNotificaciones = async () => {
     try {
       console.log('[Notificaciones] Cargando notificaciones...');
       const [dataNotif, dataCount] = await Promise.all([
         notificacionesService.obtenerNotificaciones(false),
-        notificacionesService.contarNoLeidas()
+        notificacionesService.contarNoLeidas(),
       ]);
 
       console.log('[Notificaciones] Datos recibidos:', {
         notificaciones: dataNotif.notificaciones?.length || 0,
-        noLeidas: dataCount.total || 0
+        noLeidas: dataCount.total || 0,
       });
 
       setNotificaciones(dataNotif.notificaciones || []);
@@ -45,24 +44,22 @@ export default function Notificaciones() {
     }
   };
 
-  // Cargar al montar y cada 30 segundos
   useEffect(() => {
     cargarNotificaciones();
 
     const interval = setInterval(() => {
       cargarNotificaciones();
-    }, 30000); // 30 segundos
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Marcar como leída y navegar
   const handleClickNotificacion = async (notificacion: Notificacion) => {
     try {
-      console.log('[Notificaciones] Click en notificación:', notificacion.id_notificacion);
+      console.log('[Notificaciones] Click en notificacion:', notificacion.id_notificacion);
       if (!notificacion.leida) {
         await notificacionesService.marcarComoLeida(notificacion.id_notificacion);
-        console.log('[Notificaciones] Notificación marcada como leída');
+        console.log('[Notificaciones] Notificacion marcada como leida');
       }
 
       setOpen(false);
@@ -74,18 +71,17 @@ export default function Notificaciones() {
 
       await cargarNotificaciones();
     } catch (error) {
-      console.error('[Notificaciones] Error al marcar notificación:', error);
-      toast.error('Error al procesar notificación');
+      console.error('[Notificaciones] Error al marcar notificacion:', error);
+      toast.error('Error al procesar notificacion');
     }
   };
 
-  // Marcar todas como leídas
   const handleMarcarTodasLeidas = async () => {
     try {
       setCargando(true);
       await notificacionesService.marcarTodasComoLeidas();
       await cargarNotificaciones();
-      toast.success('Todas las notificaciones marcadas como leídas');
+      toast.success('Todas las notificaciones marcadas como leidas');
     } catch (error) {
       console.error('Error al marcar todas:', error);
       toast.error('Error al marcar notificaciones');
@@ -94,21 +90,19 @@ export default function Notificaciones() {
     }
   };
 
-  // Eliminar notificación
   const handleEliminar = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
 
     try {
       await notificacionesService.eliminarNotificacion(id);
       await cargarNotificaciones();
-      toast.success('Notificación eliminada');
+      toast.success('Notificacion eliminada');
     } catch (error) {
-      console.error('Error al eliminar notificación:', error);
-      toast.error('Error al eliminar notificación');
+      console.error('Error al eliminar notificacion:', error);
+      toast.error('Error al eliminar notificacion');
     }
   };
 
-  // Icono según tipo
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
       case 'CUMPLEAÑOS':
@@ -123,7 +117,6 @@ export default function Notificaciones() {
     }
   };
 
-  // Formato de fecha relativa
   const formatearFecha = (fecha: string) => {
     const ahora = new Date();
     const fechaNotif = new Date(fecha);
@@ -193,7 +186,7 @@ export default function Notificaciones() {
               disabled={cargando}
               className="h-7 text-xs"
             >
-              <CheckCheck className="h-3.5 w-3.5 mr-1" />
+              <CheckCheck className="mr-1 h-3.5 w-3.5" />
               Marcar todas
             </Button>
           )}
@@ -204,7 +197,7 @@ export default function Notificaciones() {
         <ScrollArea className="h-[400px]">
           {notificaciones.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-              <Bell className="h-12 w-12 mb-2 text-gray-300" />
+              <Bell className="mb-2 h-12 w-12 text-gray-300" />
               <p className="text-sm">No tienes notificaciones</p>
             </div>
           ) : (
@@ -215,31 +208,31 @@ export default function Notificaciones() {
                   className={`cursor-pointer p-3 ${!notif.leida ? 'bg-blue-50' : ''}`}
                   onClick={() => handleClickNotificacion(notif)}
                 >
-                  <div className="flex items-start gap-3 w-full">
-                    <span className="text-xl mt-0.5 flex-shrink-0">
+                  <div className="flex w-full items-start gap-3">
+                    <span className="mt-0.5 flex-shrink-0 text-xl">
                       {getTipoIcon(notif.tipo)}
                     </span>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-sm ${!notif.leida ? 'font-semibold' : 'font-medium'} text-gray-900 leading-tight`}>
+                        <p className={`text-sm leading-tight text-gray-900 ${!notif.leida ? 'font-semibold' : 'font-medium'}`}>
                           {notif.titulo}
                         </p>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(e) => handleEliminar(notif.id_notificacion, e)}
-                          className="h-6 w-6 p-0 flex-shrink-0"
+                          className="h-6 w-6 flex-shrink-0 p-0"
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
                       </div>
 
-                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                      <p className="mt-1 line-clamp-2 text-xs text-gray-600">
                         {notif.mensaje}
                       </p>
 
-                      <div className="flex items-center justify-between mt-2">
+                      <div className="mt-2 flex items-center justify-between">
                         <span className="text-xs text-gray-500">
                           {formatearFecha(notif.fecha_creacion)}
                         </span>
@@ -251,7 +244,7 @@ export default function Notificaciones() {
                     </div>
 
                     {!notif.leida && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1" />
+                      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
                     )}
                   </div>
                 </DropdownMenuItem>

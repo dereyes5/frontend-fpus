@@ -88,6 +88,13 @@ export const benefactoresService = {
     return response.data;
   },
 
+  async getSiguienteConvenio(): Promise<ApiResponse<{ n_convenio: string; iniciales_sucursal: string }>> {
+    const response = await api.get<ApiResponse<{ n_convenio: string; iniciales_sucursal: string }>>(
+      '/benefactores/convenio/siguiente'
+    );
+    return response.data;
+  },
+
   // Subir contrato PDF
   async subirContrato(id: number, file: File): Promise<ApiResponse<{ filename: string; path: string }>> {
     const formData = new FormData();
@@ -120,5 +127,30 @@ export const benefactoresService = {
   async eliminarContrato(id: number): Promise<ApiResponse<void>> {
     const response = await api.delete<ApiResponse<void>>(`/benefactores/${id}/contrato`);
     return response.data;
+  },
+
+  // Subir PDF de cancelacion y marcar benefactor como cancelado
+  async subirCancelacion(id: number, file: File): Promise<ApiResponse<{ filename: string; path: string }>> {
+    const formData = new FormData();
+    formData.append('cancelacion', file);
+    const response = await api.post<ApiResponse<{ filename: string; path: string }>>(
+      `/benefactores/${id}/cancelacion`,
+      formData
+    );
+    return response.data;
+  },
+
+  getCancelacionUrl(id: number): string {
+    const token = localStorage.getItem('fpus_token');
+    return `${api.defaults.baseURL}/benefactores/${id}/cancelacion?token=${token}`;
+  },
+
+  async verificarCancelacion(id: number): Promise<boolean> {
+    try {
+      const response = await api.get<ApiResponse<{ existe: boolean }>>(`/benefactores/${id}/cancelacion?verificar=true`);
+      return response.data.data.existe;
+    } catch (error) {
+      return false;
+    }
   },
 };

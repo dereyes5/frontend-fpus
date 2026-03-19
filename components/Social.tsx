@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Search, AlertCircle, Clock } from "lucide-react";
+import { Plus, Search, AlertCircle, Clock, Camera, Upload, X, FileText } from "lucide-react";
 import { MapContainer, TileLayer, CircleMarker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { Button } from "./ui/button";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
 import { Card, CardContent } from "./ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Separator } from "./ui/separator";
@@ -26,7 +26,6 @@ type CasoSocialUI = {
   id: number;
   beneficiario: string;
   tipoCaso: BeneficiarioSocial["tipo_caso"];
-  prioridad: BeneficiarioSocial["prioridad"];
   estado: BeneficiarioSocial["estado"];
   usuarioCarga: string;
   fechaInicio: string;
@@ -43,29 +42,86 @@ type HistorialItemUI = {
 };
 
 const TIPOS_CASO: BeneficiarioSocial["tipo_caso"][] = [
-  "Apoyo alimentario",
-  "Apoyo medico" as BeneficiarioSocial["tipo_caso"],
-  "Vivienda",
-  "Educacion" as BeneficiarioSocial["tipo_caso"],
-  "Apoyo psicologico" as BeneficiarioSocial["tipo_caso"],
-  "Otro",
+  "ATENCION_PERMANENTE",
+  "ATENCION_NO_PERMANENTE",
+  "ATENCIONES_EVENTUALES",
 ];
 
-const PRIORIDADES: BeneficiarioSocial["prioridad"][] = ["Alta", "Media", "Baja"];
+const TAB_INFO: Record<string, { label: string; shortLabel: string; description: string }> = {
+  informacion_personal: {
+    label: "Informacion personal",
+    shortLabel: "Personal",
+    description: "Datos base del beneficiario, identificacion y ubicacion principal.",
+  },
+  familiar_convivencia: {
+    label: "Familia y convivencia",
+    shortLabel: "Familiar",
+    description: "Red familiar cercana y forma de convivencia del caso.",
+  },
+  vivienda: {
+    label: "Vivienda",
+    shortLabel: "Vivienda",
+    description: "Condiciones del hogar, barreras y servicios disponibles.",
+  },
+  salud: {
+    label: "Salud",
+    shortLabel: "Salud",
+    description: "Estado general, medicacion y alertas medicas relevantes.",
+  },
+  nutricion: {
+    label: "Nutricion",
+    shortLabel: "Nutricion",
+    description: "Habitos de alimentacion y frecuencia de comidas.",
+  },
+  recursos: {
+    label: "Recursos economicos",
+    shortLabel: "Recursos",
+    description: "Ingresos, pensiones y responsables de cobro.",
+  },
+  red_apoyo: {
+    label: "Red de apoyo",
+    shortLabel: "Red apoyo",
+    description: "Actividades, organizacion social y entorno de apoyo.",
+  },
+  coordenadas: {
+    label: "Coordenadas",
+    shortLabel: "Coordenadas",
+    description: "Ubicacion geografica del caso y referencia en mapa.",
+  },
+  levantamiento: {
+    label: "Levantamiento y documentos",
+    shortLabel: "Levantamiento",
+    description: "Cierre de la ficha, tipo de caso y documentos adjuntos.",
+  },
+};
 
 function normalizeTipoCaso(tipo: string): BeneficiarioSocial["tipo_caso"] {
   const map: Record<string, BeneficiarioSocial["tipo_caso"]> = {
-    "Apoyo alimentario": "Apoyo alimentario",
-    "Apoyo medico": "Apoyo m\u00e9dico",
-    "Apoyo m\u00e9dico": "Apoyo m\u00e9dico",
-    "Vivienda": "Vivienda",
-    "Educacion": "Educaci\u00f3n",
-    "Educaci\u00f3n": "Educaci\u00f3n",
-    "Apoyo psicologico": "Apoyo psicol\u00f3gico",
-    "Apoyo psicol\u00f3gico": "Apoyo psicol\u00f3gico",
-    "Otro": "Otro",
+    "ATENCION_PERMANENTE": "ATENCION_PERMANENTE",
+    "ATENCION NO PERMANENTE": "ATENCION_NO_PERMANENTE",
+    "ATENCION_NO_PERMANENTE": "ATENCION_NO_PERMANENTE",
+    "ATENCIONES EVENTUALES": "ATENCIONES_EVENTUALES",
+    "ATENCIONES_EVENTUALES": "ATENCIONES_EVENTUALES",
   };
-  return map[tipo] || "Otro";
+  return map[tipo] || "ATENCIONES_EVENTUALES";
+}
+
+function getTipoCasoLabel(tipo: string) {
+  const map: Record<string, string> = {
+    ATENCION_PERMANENTE: "Atencion permanente",
+    ATENCION_NO_PERMANENTE: "Atencion no permanente",
+    ATENCIONES_EVENTUALES: "Atenciones eventuales",
+  };
+  return map[tipo] || tipo;
+}
+
+function getTipoCasoBadge(tipo: string) {
+  const styles: Record<string, string> = {
+    ATENCION_PERMANENTE: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+    ATENCION_NO_PERMANENTE: "bg-amber-100 text-amber-800 hover:bg-amber-100",
+    ATENCIONES_EVENTUALES: "bg-sky-100 text-sky-800 hover:bg-sky-100",
+  };
+  return styles[tipo] || "bg-slate-100 text-slate-800 hover:bg-slate-100";
 }
 
 function normalizeUpperAsciiText(value: string) {
@@ -120,8 +176,7 @@ const INITIAL_RELACIONES = [
 ];
 
 const initialCasoForm = () => ({
-  tipo_caso: "Otro",
-  prioridad: "Media",
+  tipo_caso: "ATENCIONES_EVENTUALES",
   nombres: "",
   apellidos: "",
   sexo: "",
@@ -219,6 +274,26 @@ function MapaSelector({
   );
 }
 
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: any;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="mb-4 border-b border-slate-100 pb-3">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-700">{title}</h3>
+        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function Social() {
   const navigate = useNavigate();
   const { permisos } = useAuth();
@@ -229,17 +304,16 @@ export default function Social() {
   const [loadingCasos, setLoadingCasos] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [estadoFilter, setEstadoFilter] = useState("todos");
-  const [prioridadFilter, setPrioridadFilter] = useState("todos");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedCaso, setSelectedCaso] = useState<CasoSocialUI | null>(null);
+  const [detalleCaso, setDetalleCaso] = useState<BeneficiarioSocial | null>(null);
   const [showHistorial, setShowHistorial] = useState(false);
   const [historial, setHistorial] = useState<HistorialItemUI[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [savingCaso, setSavingCaso] = useState(false);
   const [nuevoCaso, setNuevoCaso] = useState(initialCasoForm());
   const [tabCaso, setTabCaso] = useState<TabCaso>("informacion_personal");
-  const [fichaPdf, setFichaPdf] = useState<File | null>(null);
-  const [firmaImagen, setFirmaImagen] = useState<File | null>(null);
+  const [documentosCaso, setDocumentosCaso] = useState<File[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
 
   const countryOptions = useState(() => {
@@ -282,12 +356,33 @@ export default function Social() {
     return date.toLocaleDateString("es-EC");
   };
 
+  const agregarDocumentos = (files: File[]) => {
+    if (!files.length) return;
+    setDocumentosCaso((prev) => {
+      const next = [...prev];
+      files.forEach((file) => {
+        const existe = next.some((item) => item.name === file.name && item.size === file.size);
+        if (!existe) next.push(file);
+      });
+      return next.slice(0, 12);
+    });
+  };
+
+  const eliminarDocumento = (index: number) => {
+    setDocumentosCaso((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const buildCasoArchivoUrl = (rutaArchivo?: string) => {
+    if (!rutaArchivo) return "";
+    const normalized = rutaArchivo.split("/").map(encodeURIComponent).join("/");
+    return `http://154.12.234.100:3000/uploads/social/casos/${normalized}`;
+  };
+
   const mapCaso = (item: BeneficiarioSocial): CasoSocialUI => ({
     id: item.id_beneficiario_social,
     beneficiario: item.nombre_completo,
     tipoCaso: item.tipo_caso,
-    prioridad: item.prioridad,
-    estado: item.estado,
+    estado: String(item.estado) === "En seguimiento" ? "Activo" : item.estado,
     usuarioCarga: item.nombre_usuario_carga || `usuario_${item.id_usuario_carga}`,
     fechaInicio: formatearFecha(item.fecha_inicio),
     descripcion: item.descripcion_caso,
@@ -339,6 +434,22 @@ export default function Social() {
     };
 
     cargarHistorial();
+  }, [showHistorial, selectedCaso]);
+
+  useEffect(() => {
+    if (!showHistorial || !selectedCaso) return;
+
+    const cargarDetalle = async () => {
+      try {
+        const response = await socialService.obtenerCasoSocialPorId(selectedCaso.id);
+        setDetalleCaso(response);
+      } catch (error: any) {
+        toast.error(error?.response?.data?.error || "Error al cargar detalle del caso");
+        setDetalleCaso(null);
+      }
+    };
+
+    cargarDetalle();
   }, [showHistorial, selectedCaso]);
 
   const handleFormValue = (field: string, value: string) => {
@@ -394,15 +505,14 @@ export default function Social() {
       return;
     }
 
-    if (!fichaPdf) {
-      toast.error("Debes adjuntar el PDF de ficha social");
+    if (documentosCaso.length === 0) {
+      toast.error("Debes adjuntar al menos un documento del levantamiento");
       setTabCaso("levantamiento");
       return;
     }
 
     const payload = {
-      tipo_caso: normalizeTipoCaso(nuevoCaso.tipo_caso || "Otro"),
-      prioridad: (nuevoCaso.prioridad || "Media") as BeneficiarioSocial["prioridad"],
+      tipo_caso: normalizeTipoCaso(nuevoCaso.tipo_caso || "ATENCIONES_EVENTUALES"),
       nombres: nuevoCaso.nombres,
       apellidos: nuevoCaso.apellidos,
       sexo: nuevoCaso.sexo as "M" | "F",
@@ -482,15 +592,13 @@ export default function Social() {
     try {
       setSavingCaso(true);
       await socialService.crearCasoSocial(payload, {
-        fichaPdf,
-        firma: firmaImagen,
+        documentos: documentosCaso,
       });
       toast.success("Caso social registrado");
       setIsDialogOpen(false);
       setNuevoCaso(initialCasoForm());
       setTabCaso("informacion_personal");
-      setFichaPdf(null);
-      setFirmaImagen(null);
+      setDocumentosCaso([]);
       await cargarCasos();
     } catch (error: any) {
       const msg = error?.response?.data?.error || error?.response?.data?.message || "Error al registrar caso social";
@@ -507,30 +615,18 @@ export default function Social() {
       caso.tipoCaso.toLowerCase().includes(term) ||
       caso.usuarioCarga.toLowerCase().includes(term);
     const matchesEstado = estadoFilter === "todos" || caso.estado === estadoFilter;
-    const matchesPrioridad = prioridadFilter === "todos" || caso.prioridad === prioridadFilter;
-    return matchesSearch && matchesEstado && matchesPrioridad;
+    return matchesSearch && matchesEstado;
   });
 
   const getEstadoBadge = (estado: string) => {
     const colors: Record<string, string> = {
       "Activo": "bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white",
-      "En seguimiento": "bg-yellow-500 hover:bg-yellow-600 text-white",
       "Cerrado": "bg-gray-400 hover:bg-gray-500 text-white",
     };
     return colors[estado] || "bg-gray-400 text-white";
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const colors: Record<string, string> = {
-      "Alta": "bg-red-500 hover:bg-red-600 text-white",
-      "Media": "bg-orange-500 hover:bg-orange-600 text-white",
-      "Baja": "bg-blue-500 hover:bg-blue-600 text-white",
-    };
-    return colors[prioridad] || "bg-gray-400 text-white";
-  };
-
   const casosActivos = casos.filter((c) => c.estado === "Activo").length;
-  const casosEnSeguimiento = casos.filter((c) => c.estado === "En seguimiento").length;
   const casosCerrados = casos.filter((c) => c.estado === "Cerrado").length;
 
   if (!puedeLeer) {
@@ -544,39 +640,72 @@ export default function Social() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[#1D1D1D] mb-2">Gestion de Casos Sociales</h1>
           <p className="text-gray-600">Gestion de casos sociales y seguimiento</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <ProtectedAction permiso={["social_ingresar", "social_administrar"]}>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white">
+                <Button className="w-full bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Registrar caso social
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[1100px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Registrar Nuevo Caso Social</DialogTitle>
+              <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[1040px] max-h-[88vh] overflow-y-auto border-slate-200 bg-slate-50 p-0">
+                <DialogHeader className="border-b border-slate-200 bg-gradient-to-r from-[#1b76b9] via-[#1a6da8] to-[#155a8a] px-4 py-4 text-white sm:px-6">
+                  <DialogTitle className="text-xl font-semibold text-white sm:text-2xl">Registrar Nuevo Caso Social</DialogTitle>
+                  <DialogDescription className="max-w-3xl text-sm text-sky-50/90">
+                    Completa la ficha social, organiza la informacion por bloques y adjunta los documentos del levantamiento antes de guardar.
+                  </DialogDescription>
                 </DialogHeader>
 
-                <Tabs value={tabCaso} onValueChange={(v) => setTabCaso(v as TabCaso)} className="w-full">
-                  <TabsList className="grid grid-cols-3 lg:grid-cols-9 h-auto gap-1 bg-gray-100 p-1">
-                    <TabsTrigger value="informacion_personal">Personal</TabsTrigger>
-                    <TabsTrigger value="familiar_convivencia">Familiar</TabsTrigger>
-                    <TabsTrigger value="vivienda">Vivienda</TabsTrigger>
-                    <TabsTrigger value="salud">Salud</TabsTrigger>
-                    <TabsTrigger value="nutricion">Nutricion</TabsTrigger>
-                    <TabsTrigger value="recursos">Recursos</TabsTrigger>
-                    <TabsTrigger value="red_apoyo">Red apoyo</TabsTrigger>
-                    <TabsTrigger value="coordenadas">Coordenadas</TabsTrigger>
-                    <TabsTrigger value="levantamiento">Levantamiento</TabsTrigger>
-                  </TabsList>
+                <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-4">
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Paso actual</p>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-base font-semibold text-slate-900 sm:text-lg">{TAB_INFO[tabCaso].label}</h3>
+                          <p className="text-sm text-slate-600">{TAB_INFO[tabCaso].description}</p>
+                        </div>
+                        <Badge className="w-fit bg-sky-100 text-sky-800 hover:bg-sky-100">
+                          Paso {TABS_CASO.indexOf(tabCaso) + 1} de {TABS_CASO.length}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Checklist rapido</p>
+                      <div className="mt-2 space-y-1.5 text-sm text-slate-600">
+                        <p>Nombre, cedula y sexo son la base minima del caso.</p>
+                        <p>Ubicacion y red familiar ayudan a seguimiento y visitas.</p>
+                        <p>El caso no se puede guardar sin al menos un documento adjunto.</p>
+                      </div>
+                    </div>
+                  </div>
 
-                  <TabsContent value="informacion_personal" className="space-y-4 mt-4">
+                  <Tabs value={tabCaso} onValueChange={(v) => setTabCaso(v as TabCaso)} className="w-full">
+                    <div className="pb-1">
+                      <TabsList className="flex h-auto flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+                        {TABS_CASO.map((tab) => (
+                          <TabsTrigger
+                            key={tab}
+                            value={tab}
+                            className="min-w-[110px] flex-1 rounded-xl border border-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] data-[state=active]:border-sky-200 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-900 sm:min-w-[126px] sm:px-3 sm:text-xs xl:flex-none"
+                          >
+                            {TAB_INFO[tab].shortLabel}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+
+                  <TabsContent value="informacion_personal" className="mt-4">
+                    <FormSection
+                      title="Informacion personal"
+                      description="Identifica al beneficiario y registra los datos base que sostienen el caso social."
+                    >
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Nombres *</Label>
@@ -622,11 +751,15 @@ export default function Social() {
                         <Label>Nacionalidad</Label>
                         <Popover open={countryOpen} onOpenChange={setCountryOpen} modal>
                           <PopoverTrigger asChild>
-                            <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-11 w-full justify-start rounded-xl border-slate-300 bg-white text-left font-normal text-slate-900 shadow-sm hover:bg-slate-50"
+                            >
                               {nuevoCaso.nacionalidad || "Seleccione pais"}
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="p-0 w-[320px]" align="start">
+                          <PopoverContent className="w-[min(320px,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-0 shadow-xl" align="start">
                             <Command>
                               <CommandInput placeholder="Buscar pais..." />
                               <CommandList>
@@ -713,6 +846,7 @@ export default function Social() {
                         <Input value={nuevoCaso.discapacidad_detalle} onChange={(e) => handleUpperFormValue("discapacidad_detalle", e.target.value)} />
                       </div>
                     )}
+                    </FormSection>
                   </TabsContent>
 
                   <TabsContent value="familiar_convivencia" className="space-y-4 mt-4">
@@ -891,7 +1025,11 @@ export default function Social() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="levantamiento" className="space-y-4 mt-4">
+                  <TabsContent value="levantamiento" className="mt-4">
+                    <FormSection
+                      title="Levantamiento y documentos"
+                      description="Completa el cierre de la ficha, define el tipo de atencion y adjunta el respaldo del caso."
+                    >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Se siente acompanado</Label><Select value={nuevoCaso.se_siente_acompanado} onValueChange={(v) => handleFormValue("se_siente_acompanado", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
                       <div className="space-y-2"><Label>Ha perdido familiar/amigo cercano en ultimo ano</Label><Select value={nuevoCaso.perdida_familiar_reciente} onValueChange={(v) => handleFormValue("perdida_familiar_reciente", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SI">SI</SelectItem><SelectItem value="NO">NO</SelectItem></SelectContent></Select></div>
@@ -903,40 +1041,79 @@ export default function Social() {
                       </div>
                     )}
                     <div className="space-y-2"><Label>Observaciones y conclusiones</Label><Textarea rows={4} value={nuevoCaso.observaciones_conclusiones} onChange={(e) => handleUpperFormValue("observaciones_conclusiones", e.target.value)} /></div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-2"><Label>Fecha generacion ficha</Label><Input type="date" value={nuevoCaso.fecha_generacion_ficha} onChange={(e) => handleFormValue("fecha_generacion_ficha", e.target.value)} /></div>
-                      <div className="space-y-2"><Label>Ficha social PDF *</Label><Input type="file" accept=".pdf" onChange={(e) => setFichaPdf(e.target.files?.[0] || null)} /></div>
-                      <div className="space-y-2"><Label>Firma (imagen)</Label><Input type="file" accept=".jpg,.jpeg,.png" onChange={(e) => setFirmaImagen(e.target.files?.[0] || null)} /></div>
-                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label>Fecha generacion ficha</Label><Input type="date" value={nuevoCaso.fecha_generacion_ficha} onChange={(e) => handleFormValue("fecha_generacion_ficha", e.target.value)} /></div>
                       <div className="space-y-2">
                         <Label>Tipo de caso</Label>
                         <Select value={nuevoCaso.tipo_caso} onValueChange={(v) => handleFormValue("tipo_caso", v)}>
                           <SelectTrigger><SelectValue placeholder="Seleccione tipo" /></SelectTrigger>
                           <SelectContent>
                             {TIPOS_CASO.map((tipo) => (
-                              <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Prioridad</Label>
-                        <Select value={nuevoCaso.prioridad} onValueChange={(v) => handleFormValue("prioridad", v)}>
-                          <SelectTrigger><SelectValue placeholder="Seleccione prioridad" /></SelectTrigger>
-                          <SelectContent>
-                            {PRIORIDADES.map((p) => (
-                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                              <SelectItem key={tipo} value={tipo}>{getTipoCasoLabel(tipo)}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div>
+                        <Label>Documentos del caso *</Label>
+                        <p className="mt-1 text-xs text-slate-600">Puedes tomar fotos con la camara o subir imagenes/PDF desde el dispositivo.</p>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <div className="flex-1">
+                          <input
+                            id="social-documentos-camara"
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => agregarDocumentos(Array.from(e.target.files || []))}
+                            className="hidden"
+                          />
+                          <Button type="button" variant="outline" className="w-full" onClick={() => document.getElementById("social-documentos-camara")?.click()}>
+                            <Camera className="h-4 w-4 mr-2" />
+                            Abrir camara
+                          </Button>
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            id="social-documentos-archivos"
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,application/pdf"
+                            onChange={(e) => agregarDocumentos(Array.from(e.target.files || []))}
+                            className="hidden"
+                          />
+                          <Button type="button" variant="outline" className="w-full" onClick={() => document.getElementById("social-documentos-archivos")?.click()}>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Subir archivos
+                          </Button>
+                        </div>
+                      </div>
+                      {documentosCaso.length > 0 && (
+                        <div className="space-y-2">
+                          {documentosCaso.map((archivo, index) => (
+                            <div key={`${archivo.name}-${archivo.size}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-slate-800">{archivo.name}</p>
+                                <p className="text-xs text-slate-500">{archivo.type || "archivo"} · {(archivo.size / 1024 / 1024).toFixed(2)} MB</p>
+                              </div>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => eliminarDocumento(index)}>
+                                <X className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    </FormSection>
                   </TabsContent>
                 </Tabs>
 
-                <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2 sm:justify-between">
-                  <div className="flex gap-2">
+                </div>
+
+                <DialogFooter className="sticky bottom-0 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:px-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
                       type="button"
@@ -954,7 +1131,7 @@ export default function Social() {
                       Siguiente
                     </Button>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={savingCaso}>Cancelar</Button>
                     <Button className="bg-[#0F8F5B] hover:bg-[#0D7A4C] text-white" onClick={handleCrearCaso} disabled={savingCaso}>
                       {savingCaso ? "Guardando..." : "Registrar caso"}
@@ -967,14 +1144,13 @@ export default function Social() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="border-gray-200"><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Casos Activos</p><p className="text-3xl text-[#1D1D1D]">{casosActivos}</p></div><div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center"><AlertCircle className="h-6 w-6 text-white" /></div></div></CardContent></Card>
-        <Card className="border-gray-200"><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">En Seguimiento</p><p className="text-3xl text-[#1D1D1D]">{casosEnSeguimiento}</p></div><div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center"><AlertCircle className="h-6 w-6 text-white" /></div></div></CardContent></Card>
         <Card className="border-gray-200"><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Casos Cerrados</p><p className="text-3xl text-[#1D1D1D]">{casosCerrados}</p></div><div className="w-12 h-12 bg-gray-400 rounded-lg flex items-center justify-center"><AlertCircle className="h-6 w-6 text-white" /></div></div></CardContent></Card>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Buscar por beneficiario, tipo o usuario" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
@@ -984,47 +1160,51 @@ export default function Social() {
             <SelectContent>
               <SelectItem value="todos">Todos los estados</SelectItem>
               <SelectItem value="Activo">Activo</SelectItem>
-              <SelectItem value="En seguimiento">En seguimiento</SelectItem>
               <SelectItem value="Cerrado">Cerrado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={prioridadFilter} onValueChange={setPrioridadFilter}>
-            <SelectTrigger><SelectValue placeholder="Filtrar por prioridad" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas las prioridades</SelectItem>
-              <SelectItem value="Alta">Alta</SelectItem>
-              <SelectItem value="Media">Media</SelectItem>
-              <SelectItem value="Baja">Baja</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+          <div className="flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-slate-800">Casos sociales registrados</p>
+              <p>Visualiza rapidamente el estado, tipo y responsable de cada caso.</p>
+            </div>
+            <Badge className="w-fit bg-sky-100 text-sky-800 hover:bg-sky-100">
+              {filteredCasos.length} caso{filteredCasos.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[980px]">
             <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead>Beneficiario</TableHead>
-                <TableHead>Tipo de Caso</TableHead>
-                <TableHead>Prioridad</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Ciudad</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+              <TableRow className="border-slate-200 bg-slate-50/80 hover:bg-slate-50/80">
+                <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Beneficiario</TableHead>
+                <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Tipo de caso</TableHead>
+                <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Estado</TableHead>
+                <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Usuario</TableHead>
+                <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Ciudad</TableHead>
+                <TableHead className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredCasos.map((caso) => (
-                <TableRow key={caso.id}>
-                  <TableCell>{caso.beneficiario}</TableCell>
-                  <TableCell>{caso.tipoCaso}</TableCell>
-                  <TableCell><Badge className={getPrioridadBadge(caso.prioridad)}>{caso.prioridad}</Badge></TableCell>
-                  <TableCell><Badge className={getEstadoBadge(caso.estado)}>{caso.estado}</Badge></TableCell>
-                  <TableCell>{caso.usuarioCarga}</TableCell>
-                  <TableCell><span className="text-sm text-gray-600">{caso.ciudad}</span></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => { setSelectedCaso(caso); setShowHistorial(true); }}>Ver detalle</Button>
+                <TableRow key={caso.id} className="border-slate-200 transition-colors hover:bg-slate-50/80">
+                  <TableCell className="px-4 py-4 font-semibold text-slate-900">{caso.beneficiario}</TableCell>
+                  <TableCell className="px-4 py-4">
+                    <Badge className={getTipoCasoBadge(caso.tipoCaso)}>
+                      {getTipoCasoLabel(caso.tipoCaso)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-4"><Badge className={getEstadoBadge(caso.estado)}>{caso.estado}</Badge></TableCell>
+                  <TableCell className="px-4 py-4 text-sm text-slate-600">{caso.usuarioCarga}</TableCell>
+                  <TableCell className="px-4 py-4"><span className="text-sm text-slate-600">{caso.ciudad}</span></TableCell>
+                  <TableCell className="px-4 py-4 text-right">
+                    <Button variant="outline" size="sm" className="border-slate-300 text-slate-700 hover:bg-slate-100" onClick={() => { setSelectedCaso(caso); setShowHistorial(true); }}>Ver detalle</Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1039,21 +1219,80 @@ export default function Social() {
 
       {selectedCaso && (
         <Dialog open={showHistorial} onOpenChange={setShowHistorial}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Detalle del Caso Social</DialogTitle></DialogHeader>
             <div className="space-y-6 py-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div><p className="text-sm text-gray-600">Beneficiario</p><p className="text-lg text-[#1D1D1D]">{selectedCaso.beneficiario}</p></div>
-                <div className="flex gap-2"><Badge className={getPrioridadBadge(selectedCaso.prioridad)}>{selectedCaso.prioridad}</Badge><Badge className={getEstadoBadge(selectedCaso.estado)}>{selectedCaso.estado}</Badge></div>
+                <div className="flex flex-wrap gap-2"><Badge className={getEstadoBadge(selectedCaso.estado)}>{selectedCaso.estado}</Badge></div>
               </div>
               <Separator />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><p className="text-sm text-gray-600 mb-1">Tipo de caso</p><p className="text-[#1D1D1D]">{selectedCaso.tipoCaso}</p></div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Tipo de caso</p>
+                  <Badge className={getTipoCasoBadge(selectedCaso.tipoCaso)}>
+                    {getTipoCasoLabel(selectedCaso.tipoCaso)}
+                  </Badge>
+                </div>
                 <div><p className="text-sm text-gray-600 mb-1">Ciudad</p><p className="text-[#1D1D1D]">{selectedCaso.ciudad}</p></div>
                 <div><p className="text-sm text-gray-600 mb-1">Fecha de inicio</p><p className="text-[#1D1D1D]">{selectedCaso.fechaInicio}</p></div>
                 <div><p className="text-sm text-gray-600 mb-1">Usuario</p><p className="text-[#1D1D1D]">{selectedCaso.usuarioCarga}</p></div>
               </div>
+              {detalleCaso && puedeEscribir && (
+                <div className="space-y-2">
+                  <Label>Modificar tipo de caso</Label>
+                  <Select
+                    value={detalleCaso.tipo_caso}
+                    onValueChange={async (value) => {
+                      try {
+                        const response = await socialService.actualizarCasoSocial(detalleCaso.id_beneficiario_social, {
+                          tipo_caso: value as BeneficiarioSocial["tipo_caso"],
+                        });
+                        const actualizado = response?.beneficiario || response;
+                        setDetalleCaso(actualizado);
+                        setCasos((prev) => prev.map((caso) => caso.id === actualizado.id_beneficiario_social ? mapCaso(actualizado) : caso));
+                        setSelectedCaso((prev) => prev && prev.id === actualizado.id_beneficiario_social ? mapCaso(actualizado) : prev);
+                        toast.success("Tipo de caso actualizado");
+                      } catch (error: any) {
+                        toast.error(error?.response?.data?.error || "Error al actualizar tipo de caso");
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Seleccione tipo" /></SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_CASO.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>{getTipoCasoLabel(tipo)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div><p className="text-sm text-gray-600 mb-2">Descripcion</p><p className="text-[#1D1D1D] text-sm p-4 bg-gray-50 rounded-lg">{selectedCaso.descripcion}</p></div>
+              {detalleCaso && Array.isArray(detalleCaso.documentos) && detalleCaso.documentos.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-slate-500" />
+                      <h3 className="text-sm font-semibold text-slate-900">Documentos del levantamiento</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {detalleCaso.documentos.map((documento) => (
+                        <a
+                          key={documento.id_documento}
+                          href={buildCasoArchivoUrl(documento.ruta_archivo)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 hover:bg-slate-100"
+                        >
+                          <span className="truncate">{documento.nombre_archivo}</span>
+                          <span className="text-xs text-slate-500">{new Date(documento.fecha_subida).toLocaleDateString("es-EC")}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
               <Separator />
               <div>
                 <h3 className="text-[#1D1D1D] mb-4 flex items-center gap-2"><Clock className="h-5 w-5" />Historial de Seguimiento</h3>

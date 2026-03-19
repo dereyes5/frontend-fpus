@@ -8,6 +8,8 @@ import {
   SaldoBenefactor,
   ApiResponse,
   Benefactor,
+  HistorialAporteMensualItem,
+  HistorialAportesSummary,
 } from '../types';
 
 export const cobrosService = {
@@ -156,10 +158,16 @@ export const cobrosService = {
     mes?: number;
     anio?: number;
     idBenefactor?: number;
-  }): Promise<ApiResponse<any[]>> {
-    const response = await api.get<ApiResponse<any[]>>('/cobros/debitos/historial', {
+    fechaDesde?: string;
+    fechaHasta?: string;
+    search?: string;
+    estado?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<HistorialAporteMensualItem[]> & { summary?: HistorialAportesSummary }> {
+    const response = await api.get<ApiResponse<HistorialAporteMensualItem[]>>('/cobros/debitos/historial', {
       params: filtros
     });
-    return response.data;
+    return response.data as ApiResponse<HistorialAporteMensualItem[]> & { summary?: HistorialAportesSummary };
   },
 };

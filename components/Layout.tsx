@@ -209,7 +209,7 @@ export default function Layout() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#1b76b9] to-[#2d8cc4] border-b border-[#1b76b9]/20 sticky top-0 z-40 shadow-md">
-        <div className="flex items-center justify-between px-6 py-4 relative">
+        <div className="flex items-center justify-between px-3 py-3 sm:px-4 lg:px-6 lg:py-4 relative gap-3">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -312,7 +312,7 @@ export default function Layout() {
         {/* Sidebar */}
         <aside className={`
           fixed lg:sticky top-[73px] left-0 z-30 h-[calc(100vh-73px)]
-          w-64 bg-white border-r border-gray-200
+          w-[85vw] max-w-64 bg-white border-r border-gray-200
           transition-transform duration-300 lg:translate-x-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
@@ -418,14 +418,14 @@ export default function Layout() {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-8">
           <Outlet />
         </main>
       </div>
 
       {/* Dialog para cambiar contrasena */}
       <Dialog open={dialogPasswordOpen} onOpenChange={setDialogPasswordOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
@@ -477,7 +477,7 @@ export default function Layout() {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
