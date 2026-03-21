@@ -1,5 +1,7 @@
 import api from './api';
 
+const API_BASE_URL = String(api.defaults.baseURL || '/api');
+
 export const fotoPerfilService = {
   /**
    * Subir o actualizar foto de perfil del usuario actual
@@ -18,9 +20,8 @@ export const fotoPerfilService = {
    * Obtener URL de foto de perfil de un usuario
    */
   obtenerUrl: (idUsuario: number): string => {
-    const baseURL = 'http://154.12.234.100:3000/api';
     const token = localStorage.getItem('fpus_token');
-    return `${baseURL}/auth/foto-perfil/${idUsuario}?token=${token}`;
+    return `${API_BASE_URL}/auth/foto-perfil/${idUsuario}?token=${token}`;
   },
 
   /**

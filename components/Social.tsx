@@ -19,8 +19,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useAuth } from "../contexts/AuthContext";
 import { ProtectedAction } from "./ProtectedAction";
 import socialService from "../services/social.service";
+import api from "../services/api";
 import type { BeneficiarioSocial, SeguimientoSocial } from "../types";
 import { toast } from "sonner";
+
+const API_ORIGIN = String(api.defaults.baseURL || "/api").replace(/\/api$/, "");
 
 type CasoSocialUI = {
   id: number;
@@ -375,7 +378,7 @@ export default function Social() {
   const buildCasoArchivoUrl = (rutaArchivo?: string) => {
     if (!rutaArchivo) return "";
     const normalized = rutaArchivo.split("/").map(encodeURIComponent).join("/");
-    return `http://154.12.234.100:3000/uploads/social/casos/${normalized}`;
+    return `${API_ORIGIN}/uploads/social/casos/${normalized}`;
   };
 
   const mapCaso = (item: BeneficiarioSocial): CasoSocialUI => ({

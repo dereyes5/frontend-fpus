@@ -22,11 +22,12 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Separator } from "./ui/separator";
 import socialService from "../services/social.service";
+import api from "../services/api";
 import type { BeneficiarioSocial, CasoSocialPendiente } from "../types";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 
-const API_BASE = "http://154.12.234.100:3000";
+const API_BASE = String(api.defaults.baseURL || "/api").replace(/\/api$/, "");
 
 function buildCasoArchivoUrl(rutaArchivo?: string) {
   if (!rutaArchivo) return "";

@@ -9,6 +9,7 @@ import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Separator } from "./ui/separator";
 import socialService from "../services/social.service";
+import api from "../services/api";
 import type { BeneficiarioSocial, SeguimientoSocial } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
@@ -39,7 +40,7 @@ function badgeEstado(estado?: string) {
   return "bg-gray-400 text-white";
 }
 
-const API_BASE = "http://154.12.234.100:3000";
+const API_BASE = String(api.defaults.baseURL || "/api").replace(/\/api$/, "");
 
 function buildSeguimientoFileUrl(rutaArchivo?: string) {
   if (!rutaArchivo) return "";

@@ -17,7 +17,8 @@ export interface AparienciaData {
   updated_at: string;
 }
 
-const API_BASE_URL = 'http://154.12.234.100:3000/api';
+const API_BASE_URL = String(api.defaults.baseURL || '/api');
+const API_ORIGIN = API_BASE_URL.replace(/\/api$/, '');
 
 export const aparienciaService = {
   async obtenerPublica(): Promise<ApiResponse<AparienciaData>> {
@@ -65,7 +66,7 @@ export const aparienciaService = {
   resolverUrl(url: string | null | undefined): string | null {
     if (!url) return null;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    if (url.startsWith('/')) return `${API_BASE_URL.replace(/\/api$/, '')}${url}`;
+    if (url.startsWith('/')) return `${API_ORIGIN}${url}`;
     return `${API_BASE_URL}/${url}`;
   },
 };
