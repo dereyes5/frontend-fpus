@@ -5,7 +5,7 @@ import moment from 'moment-timezone';
 moment.tz.setDefault('America/Guayaquil');
 
 const api = axios.create({
-  baseURL: 'http://154.12.234.100:3000/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
